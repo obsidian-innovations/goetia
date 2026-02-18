@@ -71,8 +71,8 @@ export class RitualCanvas {
 
   constructor(app: Application) {
     this._app = app
-    const w = app.canvas.width
-    const h = app.canvas.height
+    const w = app.screen.width
+    const h = app.screen.height
 
     this._atmospheric = new AtmosphericLayer(w, h)
     this._sealLayer = new SealLayer(w, h)
@@ -253,8 +253,8 @@ export class RitualCanvas {
     const result = this._glyphRecognizer.recognize([stroke])
     if (!result.recognized) return
 
-    const w = this._app.canvas.width
-    const h = this._app.canvas.height
+    const w = this._app.screen.width
+    const h = this._app.screen.height
     const pts = stroke.pathPoints
     const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length / w
     const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length / h
@@ -280,8 +280,8 @@ export class RitualCanvas {
     // Evaluate in pixel space for accurate circle fitting
     const result = this._ringEvaluator.evaluate(stroke)
 
-    const w = this._app.canvas.width
-    const h = this._app.canvas.height
+    const w = this._app.screen.width
+    const h = this._app.screen.height
     const minDim = Math.min(w, h)
 
     // Normalise center to [0,1] and radius to units of min(w,h)
@@ -309,21 +309,20 @@ export class RitualCanvas {
     this._glyphLayer.clearActiveStroke()
   }
 
-  /** Translate a DOM PointerEvent to canvas pixel coordinates (handles DPR). */
+  /** Translate a DOM PointerEvent to logical (CSS) pixel coordinates. */
   private _toCanvasPoint(e: PointerEvent): Point {
     const rect = this._app.canvas.getBoundingClientRect()
-    const dpr = window.devicePixelRatio || 1
     return {
-      x: (e.clientX - rect.left) * dpr,
-      y: (e.clientY - rect.top) * dpr,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     }
   }
 
-  /** Normalise a pixel-space point to [0, 1]. */
+  /** Normalise a logical-pixel-space point to [0, 1]. */
   private _normPt(pt: Point): Point {
     return {
-      x: pt.x / this._app.canvas.width,
-      y: pt.y / this._app.canvas.height,
+      x: pt.x / this._app.screen.width,
+      y: pt.y / this._app.screen.height,
     }
   }
 
