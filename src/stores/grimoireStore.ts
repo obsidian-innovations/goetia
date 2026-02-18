@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { createStore } from 'zustand/vanilla'
 import { grimoireDB } from '@db/grimoire'
 import type { GrimoirePage } from '@db/grimoire'
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
@@ -21,7 +21,7 @@ type GrimoireStore = GrimoireState & GrimoireActions
 
 // ─── Store ─────────────────────────────────────────────────────────────────
 
-export const useGrimoireStore = create<GrimoireStore>()((set, get) => ({
+export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────────
   pages: [],
   isLoaded: false,
