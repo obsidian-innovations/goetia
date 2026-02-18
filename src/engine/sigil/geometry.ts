@@ -173,3 +173,78 @@ export function nearestPointIndex(points: Point[], target: Point): number {
 
   return bestIndex;
 }
+
+// ─── signedArea ──────────────────────────────────────────────────────────────
+
+/**
+ * Computes the signed area of a polygon using the shoelace formula.
+ * Positive = counterclockwise, negative = clockwise.
+ * Returns 0 for fewer than 3 points.
+ */
+export function signedArea(points: Point[]): number {
+  const n = points.length;
+  if (n < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += points[i].x * points[j].y;
+    area -= points[j].x * points[i].y;
+  }
+  return area / 2;
+}
+
+// ─── doesPathSelfIntersect ───────────────────────────────────────────────────
+
+function direction(a: Point, b: Point, c: Point): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
+  const d1 = direction(c, d, a);
+  const d2 = direction(c, d, b);
+  const d3 = direction(a, b, c);
+  const d4 = direction(a, b, d);
+  if (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Returns true if any two non-adjacent segments of the path intersect.
+ * Segments that share an endpoint are not counted as intersecting.
+ * Returns false for fewer than 4 points.
+ */
+export function doesPathSelfIntersect(points: Point[]): boolean {
+  const n = points.length;
+  if (n < 4) return false;
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 2; j < n - 1; j++) {
+      if (segmentsIntersect(points[i], points[i + 1], points[j], points[j + 1])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// ─── isPathClosed ────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the distance between the first and last point is less than
+ * thresholdRatio * pathLength(points).
+ * Returns false for fewer than 2 points.
+ */
+export function isPathClosed(points: Point[], thresholdRatio: number = 0.15): boolean {
+  if (points.length < 2) return false;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const dx = last.x - first.x;
+  const dy = last.y - first.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const total = pathLength(points);
+  return dist < thresholdRatio * total;
+}

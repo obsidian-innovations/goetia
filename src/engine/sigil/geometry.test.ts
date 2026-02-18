@@ -5,6 +5,9 @@ import {
   discreteFrechetDistance,
   pathLength,
   nearestPointIndex,
+  signedArea,
+  doesPathSelfIntersect,
+  isPathClosed,
 } from './geometry';
 import type { Point } from './geometry';
 
@@ -196,5 +199,108 @@ describe('nearestPointIndex', () => {
     ];
     // target at origin — both are distance 1; first wins
     expect(nearestPointIndex(points, { x: 0, y: 0 })).toBe(0);
+  });
+});
+
+// ─── signedArea ──────────────────────────────────────────────────────────────
+
+describe('signedArea', () => {
+  it('unit square [(0,0),(1,0),(1,1),(0,1)] returns +1 (counterclockwise)', () => {
+    const square: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ];
+    expect(signedArea(square)).toBeCloseTo(1);
+  });
+
+  it('same square in reverse returns -1 (clockwise)', () => {
+    const square: Point[] = [
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 1, y: 0 },
+      { x: 0, y: 0 },
+    ];
+    expect(signedArea(square)).toBeCloseTo(-1);
+  });
+
+  it('returns 0 for fewer than 3 points', () => {
+    expect(signedArea([])).toBe(0);
+    expect(signedArea([{ x: 0, y: 0 }])).toBe(0);
+    expect(signedArea([{ x: 0, y: 0 }, { x: 1, y: 1 }])).toBe(0);
+  });
+});
+
+// ─── doesPathSelfIntersect ───────────────────────────────────────────────────
+
+describe('doesPathSelfIntersect', () => {
+  it('figure-eight path returns true', () => {
+    // Crosses itself at the center
+    const figureEight: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+      { x: 1, y: 0 },
+      { x: 0, y: 0 },
+    ];
+    expect(doesPathSelfIntersect(figureEight)).toBe(true);
+  });
+
+  it('simple triangle path returns false', () => {
+    const triangle: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 0.5, y: 1 },
+    ];
+    expect(doesPathSelfIntersect(triangle)).toBe(false);
+  });
+
+  it('straight line (3 points) returns false', () => {
+    const line: Point[] = [
+      { x: 0, y: 0 },
+      { x: 0.5, y: 0.5 },
+      { x: 1, y: 1 },
+    ];
+    expect(doesPathSelfIntersect(line)).toBe(false);
+  });
+});
+
+// ─── isPathClosed ────────────────────────────────────────────────────────────
+
+describe('isPathClosed', () => {
+  it('circle approximation where start = end returns true', () => {
+    const circle: Point[] = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 0, y: -1 },
+      { x: 1, y: 0 }, // back to start
+    ];
+    expect(isPathClosed(circle)).toBe(true);
+  });
+
+  it('open arc where start and end are far apart returns false', () => {
+    // Goes from (1,0) to (-1,0) — start and end are far apart
+    const arc: Point[] = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+    ];
+    expect(isPathClosed(arc)).toBe(false);
+  });
+
+  it('path shorter than threshold returns false', () => {
+    // A straight two-point path: dist === pathLength, so ratio = 1 > 0.15
+    const twoPoints: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+    ];
+    expect(isPathClosed(twoPoints)).toBe(false);
+  });
+
+  it('returns false for fewer than 2 points', () => {
+    expect(isPathClosed([])).toBe(false);
+    expect(isPathClosed([{ x: 0, y: 0 }])).toBe(false);
   });
 });
