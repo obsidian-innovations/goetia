@@ -99,7 +99,7 @@ async function init(): Promise<void> {
 
   // ── Resize handler ────────────────────────────────────────────────────────
   window.addEventListener('resize', () => {
-    ritualCanvas.resize(app.canvas.width, app.canvas.height)
+    ritualCanvas.resize(app.screen.width, app.screen.height)
   })
 }
 
