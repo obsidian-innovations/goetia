@@ -217,10 +217,8 @@ const GLYPH_TEMPLATES: GlyphTemplate[] = [
       pt(0.633, 0.85),
       pt(0.367, 0.85),
       pt(0.1,   0.85),
-      // Left edge: 3 more pts →(0.5,0.1)
+      // Left edge: 1 pt, stopping well short of start (open — must_not_close)
       pt(0.233, 0.6),
-      pt(0.367, 0.35),
-      pt(0.5,   0.1),
     ],
   },
 
@@ -232,7 +230,7 @@ const GLYPH_TEMPLATES: GlyphTemplate[] = [
     intent: 'Bind effect to a physical object',
     strokeCount: 1,
     invariants: ['single_stroke', 'must_not_close'],
-    // 12 pts tracing square (0.1,0.1)→(0.9,0.1)→(0.9,0.9)→(0.1,0.9), open end
+    // 10 pts tracing square (0.1,0.1)→(0.9,0.1)→(0.9,0.9)→(0.1,0.9), open end
     canonicalPath: [
       // Top edge: 4 pts
       pt(0.1,  0.1),
@@ -243,13 +241,10 @@ const GLYPH_TEMPLATES: GlyphTemplate[] = [
       pt(0.9,  0.37),
       pt(0.9,  0.63),
       pt(0.9,  0.9),
-      // Bottom edge: 3 more pts
+      // Bottom edge: 3 more pts, ending at bottom-left (open — must_not_close)
       pt(0.63, 0.9),
       pt(0.37, 0.9),
       pt(0.1,  0.9),
-      // Left edge: 2 more pts (open — must_not_close)
-      pt(0.1,  0.63),
-      pt(0.1,  0.37),
     ],
   },
 
