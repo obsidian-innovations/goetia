@@ -48,6 +48,59 @@ export class BindingRingEvaluator {
     return Math.max(0, 1 - stdDev * 4);
   }
 
+  private computeWeakPoints(
+    points: Point[],
+    cx: number,
+    cy: number,
+    radius: number,
+  ): RingWeakPoint[] {
+    const SEGMENT_COUNT = 16;
+    const segmentSize = (2 * Math.PI) / SEGMENT_COUNT;
+
+    const deviations = points.map((p) =>
+      pointDeviationFromCircle(p, cx, cy, radius),
+    );
+
+    const buckets: number[][] = Array.from(
+      { length: SEGMENT_COUNT },
+      () => [],
+    );
+    for (let i = 0; i < points.length; i++) {
+      const angle = pointAngleOnCircle(points[i], cx, cy);
+      const segIdx = Math.min(
+        Math.floor(angle / segmentSize),
+        SEGMENT_COUNT - 1,
+      );
+      buckets[segIdx].push(deviations[i]);
+    }
+
+    const segmentMeans = buckets.map((bucket) => {
+      if (bucket.length === 0) return 0;
+      return bucket.reduce((a, b) => a + b, 0) / bucket.length;
+    });
+
+    const overallMean =
+      deviations.reduce((a, b) => a + b, 0) / deviations.length;
+
+    const NOISE_FLOOR = 1e-9;
+    const weakPoints: RingWeakPoint[] = [];
+    for (let i = 0; i < SEGMENT_COUNT; i++) {
+      if (
+        buckets[i].length > 0 &&
+        segmentMeans[i] > 1.5 * overallMean &&
+        segmentMeans[i] > NOISE_FLOOR
+      ) {
+        weakPoints.push({
+          startAngle: i * segmentSize,
+          endAngle: (i + 1) * segmentSize,
+          strength: segmentMeans[i] / radius,
+        });
+      }
+    }
+
+    return weakPoints;
+  }
+
   evaluate(stroke: StrokeResult): RingResult {
     if (stroke.pathPoints.length < 2) return this.emptyResult();
 
