@@ -130,4 +130,4 @@ Configured in `tsconfig.json`, `vite.config.ts`, and `vitest.config.ts`:
 
 ## Deployment
 
-Pushes to `main` trigger `.github/workflows/deploy.yml` → `npm ci` → `npm run build` → deploy `dist/` to `gh-pages` via `peaceiris/actions-gh-pages`. `vite.config.ts` has `base: './'` for correct asset paths on GitHub Pages. Set **Settings > Pages** source to `gh-pages`.
+Pushes to `main` trigger `.github/workflows/deploy.yml` → `npm ci` → `npm run build` → deploy `dist/` via `actions/deploy-pages`. `vite.config.ts` has `base: './'` for correct asset paths on GitHub Pages. Set **Settings > Pages** source to **GitHub Actions**.

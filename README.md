@@ -41,9 +41,9 @@ Every push to `main` triggers the workflow at `.github/workflows/deploy.yml`, wh
 
 1. Installs dependencies with `npm ci`
 2. Runs `npm run build` (TypeScript check + Vite build)
-3. Deploys the `dist/` folder to the `gh-pages` branch using [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages)
+3. Deploys the `dist/` folder via [actions/deploy-pages](https://github.com/actions/deploy-pages)
 
-To enable deployment, go to your repository **Settings > Pages** and set the source branch to `gh-pages`.
+To enable deployment, go to your repository **Settings > Pages** and set the source to **GitHub Actions**.
 
 ## Project Structure
 
