@@ -234,29 +234,71 @@ export function doesPathSelfIntersect(points: Point[]): boolean {
 // ─── fitCircle ───────────────────────────────────────────────────────────────
 
 /**
- * Fits a circle to a set of points using the simple centroid method.
+ * Fits a circle to a set of points using the Kasa algebraic least-squares
+ * method for 3+ points, which minimises algebraic distance and is robust to
+ * duplicate endpoints. Falls back to the midpoint/centroid approach for fewer
+ * than 3 points.
  * Returns { cx: 0, cy: 0, radius: 0 } for fewer than 2 points.
  */
 export function fitCircle(points: Point[]): { cx: number; cy: number; radius: number } {
   if (points.length < 2) return { cx: 0, cy: 0, radius: 0 };
 
-  const count = points.length;
-  let cx = 0;
-  let cy = 0;
-  for (const p of points) {
-    cx += p.x;
-    cy += p.y;
+  if (points.length === 2) {
+    const cx = (points[0].x + points[1].x) / 2;
+    const cy = (points[0].y + points[1].y) / 2;
+    const dx = points[1].x - points[0].x;
+    const dy = points[1].y - points[0].y;
+    return { cx, cy, radius: Math.sqrt(dx * dx + dy * dy) / 2 };
   }
-  cx /= count;
-  cy /= count;
 
-  let radius = 0;
+  // Kasa algebraic least-squares method.
+  // Centre the data first to improve numerical conditioning.
+  const n = points.length;
+  let mx = 0, my = 0;
+  for (const p of points) { mx += p.x; my += p.y; }
+  mx /= n; my /= n;
+
+  // Work in centred coordinates u = x - mx, v = y - my.
+  // Solve A*u_i + B*v_i + C = u_i^2 + v_i^2 in least squares,
+  // then centre = (mx + A/2, my + B/2), r = sqrt(A^2/4 + B^2/4 + C).
+  let sU = 0, sV = 0, sUU = 0, sVV = 0, sUV = 0;
+  let sUZ = 0, sVZ = 0, sZ = 0;
   for (const p of points) {
-    radius += Math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2);
+    const u = p.x - mx, v = p.y - my, z = u * u + v * v;
+    sU += u; sV += v; sUU += u * u; sVV += v * v; sUV += u * v;
+    sUZ += u * z; sVZ += v * z; sZ += z;
   }
-  radius /= count;
 
-  return { cx, cy, radius };
+  // det of [[sUU, sUV, sU], [sUV, sVV, sV], [sU, sV, n]]
+  const det =
+    sUU * (sVV * n - sV * sV) -
+    sUV * (sUV * n - sV * sU) +
+    sU  * (sUV * sV - sVV * sU);
+
+  if (Math.abs(det) < 1e-10) {
+    // Degenerate (e.g. all collinear) — fall back to centroid method
+    let radius = 0;
+    for (const p of points) radius += Math.sqrt((p.x - mx) ** 2 + (p.y - my) ** 2);
+    return { cx: mx, cy: my, radius: radius / n };
+  }
+
+  const A =
+    (sUZ * (sVV * n - sV * sV) -
+     sUV * (sVZ * n - sV * sZ) +
+     sU  * (sVZ * sV - sVV * sZ)) / det;
+  const B =
+    (sUU * (sVZ * n - sV * sZ) -
+     sUZ * (sUV * n - sV * sU) +
+     sU  * (sUV * sZ - sVZ * sU)) / det;
+  const C =
+    (sUU * (sVV * sZ - sV * sVZ) -
+     sUV * (sUV * sZ - sV * sUZ) +
+     sUZ * (sUV * sV - sVV * sU)) / det;
+
+  const cx = mx + A / 2;
+  const cy = my + B / 2;
+  const r2 = A * A / 4 + B * B / 4 + C;
+  return { cx, cy, radius: r2 > 0 ? Math.sqrt(r2) : 0 };
 }
 
 // ─── pointDeviationFromCircle ─────────────────────────────────────────────────

@@ -107,4 +107,58 @@ describe('BindingRingEvaluator', () => {
       expect(wp.endAngle).toBeLessThanOrEqual(2 * Math.PI + 0.01);
     }
   });
+
+  it('evaluate() perfect circle returns strong result', () => {
+    const evaluator = new BindingRingEvaluator();
+    const stroke = makeCircleStroke(200, 200, 100, 64, 0);
+    const result = evaluator.evaluate(stroke);
+    expect(result.circularity).toBeGreaterThanOrEqual(0.90);
+    expect(result.closure).toBeGreaterThanOrEqual(0.90);
+    expect(result.overallStrength).toBeGreaterThanOrEqual(0.85);
+    expect(result.center.x).toBeCloseTo(200, 0);
+    expect(result.center.y).toBeCloseTo(200, 0);
+    expect(result.radius).toBeCloseTo(100, 0);
+  });
+
+  it('evaluate() circle with gap returns lower strength', () => {
+    const evaluator = new BindingRingEvaluator();
+    const closed = makeCircleStroke(200, 200, 100, 64, 0);
+    const gapped = makeCircleStroke(200, 200, 100, 64, 0.20);
+    const closedResult = evaluator.evaluate(closed);
+    const gappedResult = evaluator.evaluate(gapped);
+    expect(closedResult.overallStrength).toBeGreaterThan(gappedResult.overallStrength);
+  });
+
+  it('evaluate() fewer than 3 points returns empty result', () => {
+    const evaluator = new BindingRingEvaluator();
+    const stroke: StrokeResult = {
+      pathPoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+      simplifiedPoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+      averageVelocity: 0,
+      pressureProfile: new Array(20).fill(0.5),
+      curvature: [],
+      duration: 0,
+      startPoint: { x: 0, y: 0 },
+      endPoint: { x: 1, y: 1 },
+      totalLength: 0,
+    };
+    const result = evaluator.evaluate(stroke);
+    expect(result.overallStrength).toBe(0);
+    expect(result.radius).toBe(0);
+    expect(result.weakPoints).toHaveLength(0);
+  });
+
+  it('evaluate() returns valid RingResult shape', () => {
+    const evaluator = new BindingRingEvaluator();
+    const stroke = makeCircleStroke(150, 150, 80, 48, 0);
+    const result = evaluator.evaluate(stroke);
+    expect(typeof result.circularity).toBe('number');
+    expect(typeof result.closure).toBe('number');
+    expect(typeof result.consistency).toBe('number');
+    expect(typeof result.overallStrength).toBe('number');
+    expect(Array.isArray(result.weakPoints)).toBe(true);
+    expect(typeof result.center.x).toBe('number');
+    expect(typeof result.center.y).toBe('number');
+    expect(typeof result.radius).toBe('number');
+  });
 });
