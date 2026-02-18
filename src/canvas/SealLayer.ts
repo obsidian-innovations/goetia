@@ -7,7 +7,7 @@ const COLOR_BRIGHT = 0xcc88ff  // accuracy ≥ 0.75
 const COLOR_MEDIUM = 0x8844aa  // accuracy ≥ 0.50
 const COLOR_DIM    = 0x442266  // accuracy < 0.50
 
-const NODE_GHOST   = 0x3a1f66
+const NODE_GHOST   = 0x7755bb
 const NODE_DONE    = 0xaa66ff
 
 // ─── SealLayer ─────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@ export class SealLayer extends Container {
       for (let i = 1; i < path.length; i++) {
         g.lineTo(path[i].x * this._w, path[i].y * this._h)
       }
-      g.stroke({ color: 0x2a1044, width: 1, alpha: 0.5 })
+      g.stroke({ color: 0x6633aa, width: 1.5, alpha: 0.6 })
     }
 
     // 2. Completed connections (coloured by accuracy)
