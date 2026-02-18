@@ -1,12 +1,12 @@
-# CLAUDE.md — Goetia
+# CLAUDE.md
 
-Primary reference for any AI assistant working on this codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ---
 
 ## Project Overview
 
-Goetia is a browser-based occult game where players craft sigils to summon and bind demons from the Ars Goetia (The Lesser Key of Solomon). The core mechanic is a three-layer ritual drawing system:
+Goetia is a browser-based occult game where players craft sigils to summon and bind demons from the Ars Goetia. The core mechanic is a three-layer ritual drawing system:
 
 1. **Foundation Seal** — the player traces the unique geometric seal of the chosen demon
 2. **Intent Glyphs** — the player inscribes symbolic glyphs that declare purpose and shape the binding
@@ -14,7 +14,28 @@ Goetia is a browser-based occult game where players craft sigils to summon and b
 
 Completed sigils are stored in a personal **grimoire**.
 
-**This codebase is scaffolding only.** No game logic is implemented yet.
+**This codebase is scaffolding only.** No game logic is implemented yet (canvas, stores, services, db layers are empty).
+
+---
+
+## Commands
+
+```bash
+npm install          # Install dependencies
+npm run dev          # Start Vite dev server
+npm run build        # tsc + vite build (production)
+npm run preview      # Preview production build
+npx tsc --noEmit     # Type-check only
+
+# Run all tests
+npx vitest run
+
+# Run a single test file
+npx vitest run src/engine/sigil/geometry.test.ts
+
+# Run tests in watch mode
+npx vitest
+```
 
 ---
 
@@ -27,6 +48,7 @@ Completed sigils are stored in a personal **grimoire**.
 | `pixi.js` v8 | 2D WebGL/WebGPU canvas rendering |
 | `zustand` | Minimal global state management |
 | `vite-plugin-pwa` | Progressive Web App support with auto-update |
+| `vitest` | Unit test runner (globals: true) |
 
 ---
 
@@ -50,35 +72,29 @@ engine  →  canvas  →  stores  →  services
 
 ---
 
-## Directory Structure
+## Engine Internals
 
-```
-goetia/
-├── .github/workflows/deploy.yml   # GitHub Pages deployment
-├── public/icons/                   # PWA icon placeholders
-├── src/
-│   ├── engine/
-│   │   ├── sigil/
-│   │   ├── demons/
-│   │   └── grimoire/
-│   ├── canvas/
-│   ├── stores/
-│   ├── services/
-│   ├── db/
-│   ├── main.ts                    # PixiJS app initialization
-│   └── style.css                  # Global styles
-├── index.html                     # Entry HTML with PWA meta tags
-├── vite.config.ts                 # Vite + PWA plugin config
-├── tsconfig.json                  # TypeScript config with path aliases
-├── package.json
-└── CLAUDE.md                      # This file
-```
+All implemented logic lives in `src/engine/sigil/`. Key modules:
+
+**`Types.ts`** — All shared types. Central source of truth for `Point`, `Sigil`, `Demon`, `StrokeResult`, `RingResult`, `GlyphResult`, and branded ID types (`NodeId`, `GlyphId`). Every engine value is in normalized 0–1 coordinate space.
+
+**`geometry.ts`** — Pure geometry utilities: `normalizePathToUnitSpace`, `resamplePath`, `discreteFrechetDistance`, `fitCircle` (Kasa algebraic least-squares), `signedArea` (shoelace formula), `doesPathSelfIntersect`, `isPathClosed`, and statistical helpers.
+
+**`StrokeEvaluator`** — Stateful class: call `addPoint(PointerInputEvent)` during drawing, then `finalize()` to get a `StrokeResult`. Internally deduplicates close points, applies Ramer–Douglas–Peucker simplification (`rdpSimplify`), samples pressure along arc length, and computes per-vertex curvature. Coordinates are in **pixel space** (not normalized) — normalization happens downstream.
+
+**`GlyphLibrary.ts`** — Defines 12 glyph templates across three semantic groups (Vector, Quality, Duration). Each template has a canonical normalized path, stroke count, and geometric invariants (`must_close`, `must_not_close`, `must_self_intersect`, `clockwise`, `counterclockwise`). Use `GLYPHS` constants for IDs, `getGlyphTemplate(id)` to retrieve a template.
+
+**`GlyphRecognizer`** — Stateless class. `recognize(strokes: StrokeResult[])` returns a `GlyphResult`. Pipeline: combine strokes → normalize → resample to 32 points → filter templates by stroke count and invariants → score via Procrustes analysis → return top match above 0.55 confidence threshold.
+
+**`BindingRingEvaluator`** — Stateless class. `evaluate(stroke)` fits a circle (Kasa), then computes circularity (RMS deviation), closure (gap/diameter ratio), consistency (pressure std dev), and weak points (16-segment angular bucketing). `overallStrength = circularity*0.4 + closure*0.35 + consistency*0.25 − weakPoints*0.05`.
+
+**`DemonRegistry.ts`** — Contains `DEMON_REGISTRY` (6 demons: Bael, Agares, Vassago, Samigina, Marbas, Valefor) and `getDemon(id)` / `listDemons()`. Each `Demon` has `SealGeometry` (nodes + weighted edges, edge weights sum to ~1.0). Throws `DemonNotFoundError` for unknown IDs.
 
 ---
 
 ## Path Aliases
 
-Configured in both `tsconfig.json` (paths) and `vite.config.ts` (resolve.alias):
+Configured in both `tsconfig.json` and `vite.config.ts` (and `vitest.config.ts`):
 
 | Alias | Resolves to |
 |---|---|
@@ -93,38 +109,15 @@ Configured in both `tsconfig.json` (paths) and `vite.config.ts` (resolve.alias):
 ## Development Conventions
 
 - **Engine modules are pure TypeScript.** No UI imports, no PixiJS imports in `src/engine/`.
-- **All coordinates in the engine are normalized 0–1.** Scaling to pixels happens only in the canvas layer.
+- **All coordinates in the engine are normalized 0–1.** `StrokeEvaluator` receives pixel-space input; normalization to 0–1 must happen in the canvas layer before passing data deeper.
 - **No game logic in canvas, stores, or services.** Logic belongs in the engine; other layers orchestrate and render.
-
----
-
-## Running the Project
-
-```bash
-# Install dependencies
-npm install
-
-# Start dev server
-npm run dev
-
-# Type check
-npx tsc --noEmit
-
-# Production build
-npm run build
-
-# Preview production build
-npm run preview
-```
+- **Branded ID types** (`NodeId`, `GlyphId`) prevent mixing string identifiers. Use casts at definition sites only.
+- **Edge weights per demon sum to ~1.0** — maintain this invariant when adding new seal geometries.
 
 ---
 
 ## Deployment
 
-Pushes to `main` trigger `.github/workflows/deploy.yml`:
-
-1. `npm ci`
-2. `npm run build`
-3. Deploy `dist/` to `gh-pages` via `peaceiris/actions-gh-pages`
+Pushes to `main` trigger `.github/workflows/deploy.yml` → `npm ci` → `npm run build` → deploy `dist/` to `gh-pages` via `peaceiris/actions-gh-pages`.
 
 Set repository **Settings > Pages** source to `gh-pages` branch.
