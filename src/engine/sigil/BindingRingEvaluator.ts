@@ -102,28 +102,29 @@ export class BindingRingEvaluator {
   }
 
   evaluate(stroke: StrokeResult): RingResult {
-    if (stroke.pathPoints.length < 2) return this.emptyResult();
+    const points = stroke.pathPoints;
+    if (points.length < 3) return this.emptyResult();
 
-    const { cx, cy, radius } = fitCircle(stroke.pathPoints);
-    const circularity = this.computeCircularity(stroke.pathPoints, cx, cy, radius);
-    const closure = this.computeClosure(stroke.pathPoints, radius);
+    const { cx, cy, radius } = fitCircle(points);
+    if (radius < 1) return this.emptyResult();
+
+    const circularity = this.computeCircularity(points, cx, cy, radius);
+    const closure = this.computeClosure(points, radius);
     const consistency = this.computeConsistency(stroke.pressureProfile);
+    const weakPoints = this.computeWeakPoints(points, cx, cy, radius);
 
-    // Placeholder weak-point detection; full scan via pointAngleOnCircle to be implemented
-    const gapStartAngle = pointAngleOnCircle(
-      stroke.pathPoints[stroke.pathPoints.length - 1],
-      cx,
-      cy,
-    );
-    const gapEndAngle = pointAngleOnCircle(stroke.pathPoints[0], cx, cy);
-    const weakPoints: RingWeakPoint[] =
-      closure < 1 ? [{ startAngle: gapStartAngle, endAngle: gapEndAngle, strength: closure }] : [];
+    const rawStrength =
+      circularity * 0.40 +
+      closure * 0.35 +
+      consistency * 0.25;
+    const penalty = weakPoints.length * 0.05;
+    const overallStrength = Math.max(0, rawStrength - penalty);
 
     return {
       circularity,
       closure,
       consistency,
-      overallStrength: 0,
+      overallStrength,
       weakPoints,
       center: { x: cx, y: cy },
       radius,
