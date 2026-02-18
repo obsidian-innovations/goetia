@@ -8,6 +8,15 @@ import { haptic } from './services/haptics'
 import { audioManager } from './services/audio'
 
 async function init(): Promise<void> {
+  // ── UI overlay first — visible even if PixiJS fails ─────────────────────
+  const ui = new UIManager()
+
+  // Load grimoire from localStorage
+  useGrimoireStore.getState().load()
+
+  // Show demon select immediately so the user sees something
+  ui.showDemonSelect()
+
   // ── PixiJS application ────────────────────────────────────────────────────
   const app = new Application()
 
@@ -26,10 +35,6 @@ async function init(): Promise<void> {
 
   // ── Core objects ──────────────────────────────────────────────────────────
   const ritualCanvas = new RitualCanvas(app)
-  const ui = new UIManager()
-
-  // Load grimoire from localStorage
-  useGrimoireStore.getState().load()
 
   // ── UI callbacks ──────────────────────────────────────────────────────────
   ui.setCallbacks({
@@ -96,9 +101,14 @@ async function init(): Promise<void> {
   window.addEventListener('resize', () => {
     ritualCanvas.resize(app.canvas.width, app.canvas.height)
   })
-
-  // ── Show initial screen ───────────────────────────────────────────────────
-  ui.showDemonSelect()
 }
 
-init().catch(console.error)
+init().catch((err) => {
+  console.error(err)
+  // Show the error on screen so it's not silently lost
+  const msg = document.createElement('p')
+  msg.textContent = `Init error: ${err instanceof Error ? err.message : String(err)}`
+  msg.style.cssText =
+    'color:#ff6666;text-align:center;margin-top:2rem;font-family:Georgia,serif;padding:0 1rem'
+  document.body.appendChild(msg)
+})
