@@ -8,6 +8,11 @@ import {
   signedArea,
   doesPathSelfIntersect,
   isPathClosed,
+  fitCircle,
+  pointDeviationFromCircle,
+  rmsDeviation,
+  standardDeviation,
+  pointAngleOnCircle,
 } from './geometry';
 import type { Point } from './geometry';
 
@@ -302,5 +307,116 @@ describe('isPathClosed', () => {
   it('returns false for fewer than 2 points', () => {
     expect(isPathClosed([])).toBe(false);
     expect(isPathClosed([{ x: 0, y: 0 }])).toBe(false);
+  });
+});
+
+// ─── fitCircle ───────────────────────────────────────────────────────────────
+
+describe('fitCircle', () => {
+  it('4 cardinal points at radius 1 from origin returns cx≈0, cy≈0, radius≈1', () => {
+    const points: Point[] = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 0, y: -1 },
+    ];
+    const result = fitCircle(points);
+    expect(result.cx).toBeCloseTo(0);
+    expect(result.cy).toBeCloseTo(0);
+    expect(result.radius).toBeCloseTo(1.0);
+  });
+
+  it('single point returns radius 0', () => {
+    const result = fitCircle([{ x: 3, y: 4 }]);
+    expect(result.radius).toBe(0);
+  });
+
+  it('two points returns cx and cy at their midpoint', () => {
+    const result = fitCircle([{ x: 0, y: 0 }, { x: 4, y: 0 }]);
+    expect(result.cx).toBeCloseTo(2);
+    expect(result.cy).toBeCloseTo(0);
+  });
+});
+
+// ─── pointDeviationFromCircle ─────────────────────────────────────────────────
+
+describe('pointDeviationFromCircle', () => {
+  it('point exactly on circle returns 0', () => {
+    // Point at distance 5 from origin, circle with cx=0, cy=0, radius=5
+    expect(pointDeviationFromCircle({ x: 5, y: 0 }, 0, 0, 5)).toBeCloseTo(0);
+  });
+
+  it('point at center returns radius', () => {
+    expect(pointDeviationFromCircle({ x: 0, y: 0 }, 0, 0, 5)).toBeCloseTo(5);
+  });
+
+  it('point at 2x radius distance returns radius', () => {
+    // Point at distance 10 from center, circle radius=5 → deviation = |10 - 5| = 5
+    expect(pointDeviationFromCircle({ x: 10, y: 0 }, 0, 0, 5)).toBeCloseTo(5);
+  });
+});
+
+// ─── rmsDeviation ────────────────────────────────────────────────────────────
+
+describe('rmsDeviation', () => {
+  it('[3, 4] returns 5 / sqrt(2)', () => {
+    expect(rmsDeviation([3, 4])).toBeCloseTo(5 / Math.sqrt(2));
+  });
+
+  it('empty array returns 0', () => {
+    expect(rmsDeviation([])).toBe(0);
+  });
+
+  it('[0, 0, 0] returns 0', () => {
+    expect(rmsDeviation([0, 0, 0])).toBe(0);
+  });
+});
+
+// ─── standardDeviation ───────────────────────────────────────────────────────
+
+describe('standardDeviation', () => {
+  it('[2, 4, 4, 4, 5, 5, 7, 9] returns 2.0', () => {
+    expect(standardDeviation([2, 4, 4, 4, 5, 5, 7, 9])).toBeCloseTo(2.0);
+  });
+
+  it('single element returns 0', () => {
+    expect(standardDeviation([42])).toBe(0);
+  });
+
+  it('all same values returns 0', () => {
+    expect(standardDeviation([7, 7, 7, 7])).toBeCloseTo(0);
+  });
+});
+
+// ─── pointAngleOnCircle ──────────────────────────────────────────────────────
+
+describe('pointAngleOnCircle', () => {
+  const cx = 2;
+  const cy = 3;
+  const r = 5;
+
+  it('point directly right of center returns 0', () => {
+    expect(pointAngleOnCircle({ x: cx + r, y: cy }, cx, cy)).toBeCloseTo(0);
+  });
+
+  it('point directly above center returns approximately 3π/2 (≈4.712)', () => {
+    // In canvas space y increases downward; "above" means cy - r
+    expect(pointAngleOnCircle({ x: cx, y: cy - r }, cx, cy)).toBeCloseTo(3 * Math.PI / 2);
+  });
+
+  it('all returned angles are in range [0, 2π)', () => {
+    const testPoints: Point[] = [
+      { x: cx + r, y: cy },
+      { x: cx, y: cy + r },
+      { x: cx - r, y: cy },
+      { x: cx, y: cy - r },
+      { x: cx + r * Math.cos(2.5), y: cy + r * Math.sin(2.5) },
+      { x: cx + r * Math.cos(-1), y: cy + r * Math.sin(-1) },
+    ];
+    for (const p of testPoints) {
+      const angle = pointAngleOnCircle(p, cx, cy);
+      expect(angle).toBeGreaterThanOrEqual(0);
+      expect(angle).toBeLessThan(2 * Math.PI);
+    }
   });
 });
