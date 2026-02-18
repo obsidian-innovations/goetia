@@ -62,4 +62,49 @@ describe('BindingRingEvaluator', () => {
     );
     expect(result).toBe(0.7);
   });
+
+  it('perfect circle produces no weak points', () => {
+    const evaluator = new BindingRingEvaluator();
+    const stroke = makeCircleStroke(200, 200, 100, 64);
+    const points = stroke.pathPoints;
+    const result = (evaluator as any).computeWeakPoints(
+      points, 200, 200, 100
+    );
+    expect(result.length).toBe(0);
+  });
+
+  it('jagged region produces weak points', () => {
+    const evaluator = new BindingRingEvaluator();
+    const stroke = makeCircleStroke(200, 200, 100, 64);
+    const jagged = stroke.pathPoints.map((p, i) => {
+      if (i >= 45 && i <= 55) {
+        const dx = p.x - 200;
+        const dy = p.y - 200;
+        return { x: 200 + dx * 1.6, y: 200 + dy * 1.6 };
+      }
+      return p;
+    });
+    const result = (evaluator as any).computeWeakPoints(
+      jagged, 200, 200, 100
+    );
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('all weak point angles are in range [0, 2π)', () => {
+    const evaluator = new BindingRingEvaluator();
+    const stroke = makeCircleStroke(200, 200, 100, 64);
+    const jagged = stroke.pathPoints.map((p, i) => {
+      if (i >= 20 && i <= 25) {
+        return { x: p.x * 1.5, y: p.y * 1.5 };
+      }
+      return p;
+    });
+    const result = (evaluator as any).computeWeakPoints(
+      jagged, 200, 200, 100
+    );
+    for (const wp of result) {
+      expect(wp.startAngle).toBeGreaterThanOrEqual(0);
+      expect(wp.endAngle).toBeLessThanOrEqual(2 * Math.PI + 0.01);
+    }
+  });
 });
