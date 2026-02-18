@@ -1,4 +1,4 @@
-import { GlyphId, IntentCoherenceResult, PlacedGlyph } from './Types'
+import type { GlyphId, IntentCoherenceResult, PlacedGlyph } from './Types'
 import { COHERENCE_RULES } from './CoherenceRules'
 
 export class IntentCoherenceChecker {

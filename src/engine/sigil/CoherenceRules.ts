@@ -1,4 +1,4 @@
-import { GlyphId } from './Types'
+import type { GlyphId } from './Types'
 import { GLYPHS } from './GlyphLibrary'
 
 // ─── Rule types ────────────────────────────────────────────────────────────

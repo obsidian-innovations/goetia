@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { IntentCoherenceChecker } from './IntentCoherenceChecker'
 import { GLYPHS } from './GlyphLibrary'
-import { PlacedGlyph } from './Types'
+import type { PlacedGlyph } from './Types'
 
 function makePlacedGlyph(glyphId: (typeof GLYPHS)[keyof typeof GLYPHS], index = 0): PlacedGlyph {
   return {

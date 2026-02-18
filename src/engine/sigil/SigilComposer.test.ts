@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { SigilComposer } from './SigilComposer'
 import { GLYPHS } from './GlyphLibrary'
-import { GlyphId, PlacedGlyph, RingResult } from './Types'
+import type { GlyphId, PlacedGlyph, RingResult } from './Types'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
