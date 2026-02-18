@@ -231,6 +231,86 @@ export function doesPathSelfIntersect(points: Point[]): boolean {
   return false;
 }
 
+// ─── fitCircle ───────────────────────────────────────────────────────────────
+
+/**
+ * Fits a circle to a set of points using the simple centroid method.
+ * Returns { cx: 0, cy: 0, radius: 0 } for fewer than 2 points.
+ */
+export function fitCircle(points: Point[]): { cx: number; cy: number; radius: number } {
+  if (points.length < 2) return { cx: 0, cy: 0, radius: 0 };
+
+  const count = points.length;
+  let cx = 0;
+  let cy = 0;
+  for (const p of points) {
+    cx += p.x;
+    cy += p.y;
+  }
+  cx /= count;
+  cy /= count;
+
+  let radius = 0;
+  for (const p of points) {
+    radius += Math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2);
+  }
+  radius /= count;
+
+  return { cx, cy, radius };
+}
+
+// ─── pointDeviationFromCircle ─────────────────────────────────────────────────
+
+/**
+ * Returns the absolute difference between the point's distance from the circle
+ * center and the circle's radius.
+ */
+export function pointDeviationFromCircle(
+  p: Point,
+  cx: number,
+  cy: number,
+  radius: number
+): number {
+  return Math.abs(Math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2) - radius);
+}
+
+// ─── rmsDeviation ────────────────────────────────────────────────────────────
+
+/**
+ * Returns the root mean square of an array of numbers.
+ * Returns 0 for an empty array.
+ */
+export function rmsDeviation(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sumSq = values.reduce((acc, v) => acc + v * v, 0);
+  return Math.sqrt(sumSq / values.length);
+}
+
+// ─── standardDeviation ───────────────────────────────────────────────────────
+
+/**
+ * Returns the population standard deviation of an array.
+ * Returns 0 for arrays with fewer than 2 elements.
+ */
+export function standardDeviation(values: number[]): number {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((acc, v) => acc + v, 0) / values.length;
+  const variance = values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+// ─── pointAngleOnCircle ──────────────────────────────────────────────────────
+
+/**
+ * Returns the angle in radians of the point relative to the circle center,
+ * in the range [0, 2π).
+ */
+export function pointAngleOnCircle(p: Point, cx: number, cy: number): number {
+  let angle = Math.atan2(p.y - cy, p.x - cx);
+  if (angle < 0) angle += 2 * Math.PI;
+  return angle;
+}
+
 // ─── isPathClosed ────────────────────────────────────────────────────────────
 
 /**
