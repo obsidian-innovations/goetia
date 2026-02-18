@@ -1,20 +1,41 @@
 {
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@engine": ["src/engine/index.ts"],
+      "@engine": ["src/engine"],
       "@engine/*": ["src/engine/*"],
-      "@canvas": ["src/canvas/index.ts"],
+      "@canvas": ["src/canvas"],
       "@canvas/*": ["src/canvas/*"],
-      "@stores": ["src/stores/index.ts"],
+      "@stores": ["src/stores"],
       "@stores/*": ["src/stores/*"],
-      "@db": ["src/db/index.ts"],
-      "@db/*": ["src/db/*"],
-      "@services": ["src/services/index.ts"],
-      "@services/*": ["src/services/*"]
+      "@services": ["src/services"],
+      "@services/*": ["src/services/*"],
+      "@db": ["src/db"],
+      "@db/*": ["src/db/*"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.d.ts", "expo-env.d.ts"]
+  "include": ["src"]
 }

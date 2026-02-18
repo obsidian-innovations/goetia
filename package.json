@@ -1,36 +1,20 @@
 {
   "name": "goetia",
-  "version": "1.0.0",
-  "main": "index.ts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "test": "jest"
-  },
-  "dependencies": {
-    "@nozbe/watermelondb": "^0.28.0",
-    "@supabase/supabase-js": "^2.96.0",
-    "expo": "~54.0.33",
-    "expo-sqlite": "^16.0.10",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-gesture-handler": "^2.30.0",
-    "react-native-mmkv": "^4.1.2",
-    "zustand": "^5.0.11"
-  },
-  "optionalDependencies": {
-    "@shopify/react-native-skia": "^2.4.21"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/jest": "^30.0.0",
-    "@types/react": "~19.1.0",
-    "babel-plugin-module-resolver": "^5.0.2",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.6",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.2.0"
   },
-  "private": true
+  "dependencies": {
+    "pixi.js": "^8.16.0",
+    "zustand": "^5.0.11"
+  }
 }

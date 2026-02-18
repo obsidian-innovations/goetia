@@ -1,87 +1,60 @@
 # Goetia
 
-An occult game for browser and mobile where players craft sigils to summon and bind demons from the **Ars Goetia** — the first section of the 17th-century grimoire *The Lesser Key of Solomon*, cataloguing 72 demons of the Goetia hierarchy.
+A browser-based occult game where players craft sigils to summon and bind demons from the Ars Goetia (The Lesser Key of Solomon).
 
-Players draw sigils on a magical canvas, invoke the correct seals and names of power, and bind demons to their will. Each of the 72 spirits has unique attributes, abilities, and binding conditions drawn from historical demonological tradition.
+Players draw ritual sigils through a multi-layered system: tracing a demon's foundation seal, inscribing intent glyphs, and closing with a binding ring. Completed sigils are stored in a personal grimoire.
 
----
+## Stack
 
-## Tech Stack
-
-| Concern | Library |
+| Technology | Role |
 |---|---|
-| Framework | [Expo](https://expo.dev) SDK 54 — managed workflow |
-| Language | TypeScript (strict mode) |
-| Drawing / Canvas | [@shopify/react-native-skia](https://shopify.github.io/react-native-skia/) |
-| Gestures | [react-native-gesture-handler](https://docs.swmansion.com/react-native-gesture-handler/) |
-| Global State | [Zustand](https://zustand-demo.pmnd.rs/) |
-| Key-Value Storage | [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv) |
-| Relational DB | [WatermelonDB](https://nozbe.github.io/WatermelonDB/) with SQLite adapter (`expo-sqlite`) |
-| Backend / Auth | [Supabase JS](https://supabase.com/docs/reference/javascript) |
+| [Vite](https://vitejs.dev/) | Build tool and dev server |
+| [TypeScript](https://www.typescriptlang.org/) | Language |
+| [PixiJS 8](https://pixijs.com/) | 2D WebGL/WebGPU canvas rendering |
+| [Zustand](https://zustand.docs.pmnd.rs/) | State management |
+| [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) | Progressive Web App support |
 
----
-
-## Directory Structure
-
-```
-/
-├── src/
-│   ├── engine/               # Core game logic (no UI)
-│   │   ├── sigil/            # Sigil construction, validation, and encoding
-│   │   ├── demons/           # Ars Goetia demon definitions, attributes, and binding rules
-│   │   └── grimoire/         # Player knowledge book — unlocked lore and demon records
-│   │
-│   ├── canvas/               # Skia-powered drawing surface and gesture integration
-│   │
-│   ├── stores/               # Zustand state slices (player, session, grimoire, etc.)
-│   │
-│   ├── db/                   # WatermelonDB schema, models, and adapters
-│   │   └── migrations/       # Database migration files
-│   │
-│   └── services/             # External service clients (Supabase, analytics, etc.)
-│
-├── assets/                   # Static images, fonts, and sounds
-├── App.tsx                   # Root component
-├── app.json                  # Expo project configuration
-├── babel.config.js           # Babel + module-resolver for path aliases
-└── tsconfig.json             # TypeScript configuration with strict mode and path aliases
-```
-
----
-
-## TypeScript Path Aliases
-
-Configured in `tsconfig.json` and resolved at runtime by `babel-plugin-module-resolver`:
-
-| Alias | Resolves to |
-|---|---|
-| `@engine` | `src/engine` |
-| `@canvas` | `src/canvas` |
-| `@stores` | `src/stores` |
-| `@db` | `src/db` |
-| `@services` | `src/services` |
-
-Example usage:
-
-```ts
-import { bindDemon } from '@engine/demons';
-import { usePlayerStore } from '@stores';
-import { supabase } from '@services';
-```
-
----
-
-## Getting Started
+## Development
 
 ```bash
+# Install dependencies
 npm install
-npx expo start
+
+# Start dev server
+npm run dev
+
+# Type check
+npx tsc --noEmit
+
+# Production build
+npm run build
+
+# Preview production build
+npm run preview
 ```
 
-Run on web (`w`), Android (`a`), or iOS (`i`) from the Expo dev menu.
+## Deployment
 
----
+The project deploys to GitHub Pages automatically via GitHub Actions.
 
-## Lore Note
+Every push to `main` triggers the workflow at `.github/workflows/deploy.yml`, which:
 
-The 72 demons of the Ars Goetia were traditionally summoned inside a magical triangle, constrained by the brass vessel of Solomon, and commanded using their unique sigil — a geometric seal encoding their true name. This game recreates that ritual as interactive play.
+1. Installs dependencies with `npm ci`
+2. Runs `npm run build` (TypeScript check + Vite build)
+3. Deploys the `dist/` folder to the `gh-pages` branch using [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages)
+
+To enable deployment, go to your repository **Settings > Pages** and set the source branch to `gh-pages`.
+
+## Project Structure
+
+```
+src/
+  engine/        # Pure TypeScript game logic (no UI dependencies)
+    sigil/       # Sigil evaluation, stroke processing
+    demons/      # Demon registry and data
+    grimoire/    # Grimoire management
+  canvas/        # PixiJS rendering and input handling
+  stores/        # Zustand state slices
+  services/      # External integrations (audio, haptics)
+  db/            # Persistence layer
+```
