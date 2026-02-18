@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { createStore } from 'zustand/vanilla'
 import type {
   ConnectionResult,
   GlyphId,
@@ -55,7 +55,7 @@ const INITIAL_STATE: CanvasState = {
 
 // ─── Store ─────────────────────────────────────────────────────────────────
 
-export const useCanvasStore = create<CanvasStore>()((set) => ({
+export const useCanvasStore = createStore<CanvasStore>((set) => ({
   ...INITIAL_STATE,
 
   selectDemon(demonId: string) {
