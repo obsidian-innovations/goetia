@@ -65,7 +65,7 @@ export function generateDemand(demon: Demon, bindingIntegrity: number): DemonicD
  * Generates an escalated demand — harder than the previous one.
  * Cycles to the next template in the domain's list.
  */
-export function escalateDemand(previousDemand: DemonicDemand, demon: Demon): DemonicDemand {
+export function escalateDemand(_previousDemand: DemonicDemand, demon: Demon): DemonicDemand {
   const domain = demon.domains[0]
   // Step up by 1 escalation level for repeated demands
   const escalation = 2 // Always use hardest template for escalated demands

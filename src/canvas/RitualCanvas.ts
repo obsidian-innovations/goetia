@@ -131,6 +131,14 @@ export class RitualCanvas {
     return sigil
   }
 
+  /**
+   * Update the visible (discovered) portion of the seal for partial rendering.
+   * Pass null to show the full geometry (fully researched or starter demon).
+   */
+  setVisibleGeometry(geometry: import('@engine/sigil/Types').SealGeometry | null): void {
+    this._sealLayer.setVisibleGeometry(geometry)
+  }
+
   resize(width: number, height: number): void {
     this._atmospheric.resize(width, height)
     this._sealLayer.resize(width, height)

@@ -1,10 +1,12 @@
-import { listDemons } from '@engine/demons/DemonRegistry'
+import { listDemons, STARTER_DEMON_ID } from '@engine/demons/DemonRegistry'
 import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
+import { useResearchStore } from '@stores/researchStore'
 import type { DrawingPhase } from '@stores/canvasStore'
 import type { Demon, Sigil, SigilVisualState } from '@engine/sigil/Types'
 import type { AttentionGesture } from '@engine/charging/AttentionGesture'
 import type { DemonicDemand } from '@engine/demands/DemandEngine'
+import type { ResearchState } from '@engine/research/ResearchEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -15,6 +17,7 @@ export interface UICallbacks {
   onStartCharging?: (sigilId: string) => void
   onFulfillDemand?: (demandId: string) => void
   onIgnoreDemand?: (demandId: string) => void
+  onStudySigil?: (sigilId: string, demonId: string) => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -58,9 +61,20 @@ const STYLE = `
     display: flex; flex-direction: column; gap: 0.25rem;
   }
   .demon-card:hover { background: rgba(90,30,140,0.7); border-color: #7733aa; }
+  .demon-card.locked { opacity: 0.55; border-color: #2a0a3a; cursor: default; }
+  .demon-card.locked:hover { background: rgba(30,5,50,0.5); border-color: #2a0a3a; }
   .demon-card .d-name { font-size: 1rem; color: #ddc0ff; }
+  .demon-card.locked .d-name { color: #553366; }
   .demon-card .d-rank { font-size: 0.7rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
   .demon-card .d-legions { font-size: 0.65rem; color: #665577; }
+  .demon-card .d-research-bar-bg {
+    height: 3px; background: rgba(40,10,60,0.8); border-radius: 2px; overflow: hidden; margin-top: 0.2rem;
+  }
+  .demon-card .d-research-bar {
+    height: 100%; background: linear-gradient(to right, #5511aa, #aa55ff);
+    border-radius: 2px; transition: width 0.5s ease;
+  }
+  .demon-card .d-hint { font-size: 0.6rem; color: #554466; margin-top: 0.1rem; font-style: italic; }
   #records-btn {
     margin: 0.75rem auto; padding: 0.5rem 2rem;
     background: transparent; border: 1px solid #442255;
@@ -197,6 +211,49 @@ const STYLE = `
     letter-spacing: 0.08em; display: none;
   }
   #charging-charged-notice.visible { display: block; }
+
+  /* ── Sigil Study ── */
+  #screen-study { background: rgba(8,7,15,0.95); pointer-events: all; overflow-y: auto; }
+  #study-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #study-header h2 { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #study-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #study-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #study-content { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+  #study-meta {
+    background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px; padding: 1rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
+  }
+  #study-meta .sm-date { font-size: 0.8rem; color: #997799; }
+  #study-meta .sm-integrity { font-size: 1.1rem; color: #cc88ff; font-weight: bold; }
+  #study-meta .sm-status { font-size: 0.75rem; color: #665577; text-transform: uppercase; letter-spacing: 0.08em; }
+  #study-meta .sm-visual { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 0.4rem; }
+  #study-btn {
+    padding: 0.6rem 1.4rem; border: 1px solid #664488; background: rgba(50,10,80,0.7);
+    color: #cc88ff; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;
+    transition: all 0.2s; align-self: center;
+  }
+  #study-btn:hover { border-color: #aa44dd; color: #eebbff; background: rgba(80,20,120,0.7); }
+  .s-study-btn {
+    padding: 0.25rem 0.6rem; border: 1px solid #442255; background: transparent;
+    color: #8866aa; border-radius: 3px; cursor: pointer;
+    font-family: inherit; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+    flex-shrink: 0;
+  }
+  .s-study-btn:hover { border-color: #7733aa; color: #cc88ff; }
+  #study-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #study-cooldown { font-size: 0.75rem; color: #553366; text-align: center; }
+  #study-lore {
+    background: rgba(20,5,35,0.8); border: 1px solid #2a0a40; border-radius: 8px;
+    padding: 0.75rem; font-size: 0.82rem; color: #9977aa; font-style: italic; line-height: 1.5;
+  }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -206,6 +263,7 @@ export class UIManager {
   private readonly _screens: Record<string, HTMLDivElement> = {}
   private _callbacks: UICallbacks | null = null
   private _unsubscribeStore: (() => void) | null = null
+  private _studyCooldowns: Map<string, number> = new Map()
 
   constructor() {
     this._injectStyles()
@@ -242,6 +300,70 @@ export class UIManager {
     const label = this._root.querySelector<HTMLElement>('#charging-demon-name')
     if (label) label.textContent = demonName.toUpperCase()
     this._show('charging')
+  }
+
+  showStudy(sigil: Sigil, demonName: string, researchState: ResearchState | null): void {
+    const h2 = this._root.querySelector<HTMLElement>('#study-demon-name')
+    if (h2) h2.textContent = demonName.toUpperCase()
+
+    const content = this._root.querySelector<HTMLElement>('#study-content')
+    if (!content) { this._show('study'); return }
+    content.innerHTML = ''
+
+    // ── Sigil metadata ────────────────────────────────────────────────────
+    const meta = el('div', '', 'study-meta')
+    const dot = el('span', 'sm-visual') as HTMLSpanElement
+    dot.style.cssText = `width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:0.4rem;background:${VISUAL_STATE_COLORS[sigil.visualState]}`
+    const dateEl = el('div', 'sm-date')
+    dateEl.textContent = `Crafted ${new Date(sigil.createdAt).toLocaleDateString()}`
+    const integrityEl = el('div', 'sm-integrity')
+    integrityEl.innerHTML = `${dot.outerHTML}Integrity: ${Math.round(sigil.overallIntegrity * 100)}%`
+    const statusEl = el('div', 'sm-status')
+    statusEl.textContent = sigil.status
+    meta.appendChild(dateEl)
+    meta.appendChild(integrityEl)
+    meta.appendChild(statusEl)
+    content.appendChild(meta)
+
+    // ── Study button with cooldown ────────────────────────────────────────
+    const COOLDOWN_MS = 10 * 60 * 1000
+    const lastStudied = this._studyCooldowns.get(sigil.id) ?? 0
+    const cooldownRemaining = Math.max(0, COOLDOWN_MS - (Date.now() - lastStudied))
+
+    const btnWrap = el('div')
+    btnWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0.5rem'
+
+    const studyBtn = el('button', '', 'study-btn') as unknown as HTMLButtonElement
+    studyBtn.textContent = 'Study This Sigil'
+    studyBtn.disabled = cooldownRemaining > 0
+
+    const cooldownEl = el('div', '', 'study-cooldown')
+    if (cooldownRemaining > 0) {
+      const mins = Math.ceil(cooldownRemaining / 60_000)
+      cooldownEl.textContent = `Available again in ${mins} minute${mins !== 1 ? 's' : ''}.`
+    }
+
+    studyBtn.addEventListener('click', () => {
+      const now = Date.now()
+      if (now - (this._studyCooldowns.get(sigil.id) ?? 0) < COOLDOWN_MS) return
+      this._studyCooldowns.set(sigil.id, now)
+      studyBtn.disabled = true
+      cooldownEl.textContent = 'Studied. Return in 10 minutes for more insights.'
+      this._callbacks?.onStudySigil?.(sigil.id, sigil.demonId)
+    })
+
+    btnWrap.appendChild(studyBtn)
+    btnWrap.appendChild(cooldownEl)
+    content.appendChild(btnWrap)
+
+    // ── Lore fragments ────────────────────────────────────────────────────
+    if (researchState && researchState.loreFragments.length > 0) {
+      const lore = el('div', '', 'study-lore')
+      lore.innerHTML = researchState.loreFragments.map(f => `<p>${f}</p>`).join('')
+      content.appendChild(lore)
+    }
+
+    this._show('study')
   }
 
   updateChargingProgress(progress: number): void {
@@ -315,6 +437,7 @@ export class UIManager {
     this._screens.ritual = this._buildRitual()
     this._screens.grimoire = this._buildGrimoire()
     this._screens.charging = this._buildCharging()
+    this._screens.study = this._buildStudy()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -328,10 +451,6 @@ export class UIManager {
     screen.appendChild(h1)
 
     const grid = el('div', '', 'demon-grid')
-    const demons = listDemons()
-    for (const demon of demons) {
-      grid.appendChild(this._demonCard(demon))
-    }
     screen.appendChild(grid)
 
     const recordsBtn = el('button', '', 'records-btn')
@@ -342,25 +461,65 @@ export class UIManager {
     return screen
   }
 
-  private _demonCard(demon: Demon): HTMLDivElement {
-    const card = el('div', 'demon-card')
+  /** Rebuild the demon grid cards using the latest research states. */
+  refreshDemonGrid(): void {
+    const grid = this._root.querySelector<HTMLElement>('#demon-grid')
+    if (!grid) return
+    grid.innerHTML = ''
+    const demons = listDemons()
+    const research = useResearchStore.getState().researching
+    for (const demon of demons) {
+      const rs = research[demon.id] ?? null
+      const isStarter = demon.id === STARTER_DEMON_ID
+      const isUnlocked = isStarter || (rs !== null && rs.progress >= 1)
+      grid.appendChild(this._demonCard(demon, rs, isUnlocked))
+    }
+  }
+
+  private _demonCard(
+    demon: Demon,
+    research: ResearchState | null,
+    unlocked: boolean,
+  ): HTMLDivElement {
+    const card = el('div', unlocked ? 'demon-card' : 'demon-card locked')
 
     const name = el('div', 'd-name')
-    name.textContent = demon.name
+    name.textContent = unlocked ? demon.name : '???'
 
     const rank = el('div', 'd-rank')
     rank.textContent = demon.rank
 
     const legions = el('div', 'd-legions')
-    legions.textContent = `${demon.legions} legions`
+    legions.textContent = unlocked ? `${demon.legions} legions` : '? legions'
 
     card.appendChild(name)
     card.appendChild(rank)
     card.appendChild(legions)
-    card.addEventListener('click', () => {
-      this._callbacks?.onDemonSelect(demon.id)
-      this.showRitual(demon.name)
-    })
+
+    // Research progress bar
+    const progress = research?.progress ?? 0
+    if (progress > 0 || !unlocked) {
+      const barBg = el('div', 'd-research-bar-bg')
+      const bar = el('div', 'd-research-bar')
+      bar.style.width = `${Math.round(progress * 100)}%`
+      barBg.appendChild(bar)
+      card.appendChild(barBg)
+
+      if (!unlocked) {
+        const hint = el('div', 'd-hint')
+        hint.textContent = progress > 0
+          ? `${Math.round(progress * 100)}% researched`
+          : 'Perform rituals to discover'
+        card.appendChild(hint)
+      }
+    }
+
+    if (unlocked) {
+      card.addEventListener('click', () => {
+        this._callbacks?.onDemonSelect(demon.id)
+        this.showRitual(demon.name)
+      })
+    }
     return card
   }
 
@@ -488,11 +647,32 @@ export class UIManager {
     return screen
   }
 
+  private _buildStudy(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-study')
+
+    const header = el('div', '', 'study-header')
+    const backBtn = el('button', '', 'study-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => this.showGrimoire())
+    const h2 = el('h2')
+    h2.id = 'study-demon-name'
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'study-content')
+    screen.appendChild(content)
+
+    return screen
+  }
+
   // ─── Render helpers ───────────────────────────────────────────────────────
 
   private _renderGrimoire(): void {
     useGrimoireStore.getState().load()
     const pages = useGrimoireStore.getState().pages
+    const research = useResearchStore.getState().researching
+    const demonMap = new Map(listDemons().map(d => [d.id, d]))
     const content = this._root.querySelector<HTMLElement>('#grimoire-content')
     if (!content) return
     content.innerHTML = ''
@@ -506,18 +686,35 @@ export class UIManager {
 
     for (const page of pages) {
       if (page.sigils.length === 0) continue
+      const demon = demonMap.get(page.demonId)
+      const rs = research[page.demonId] ?? null
       const section = el('div', 'grimoire-section')
       const h3 = el('h3')
-      h3.textContent = page.demonId
+      h3.textContent = demon?.name ?? page.demonId
       section.appendChild(h3)
+
+      // Research progress bar (if not fully known)
+      if (rs && rs.progress < 1) {
+        const barBg = el('div', 'd-research-bar-bg')
+        barBg.style.cssText = 'height:3px;background:rgba(40,10,60,0.8);border-radius:2px;overflow:hidden;margin-bottom:0.5rem'
+        const bar = el('div', 'd-research-bar')
+        bar.style.cssText = `height:100%;background:linear-gradient(to right,#5511aa,#aa55ff);border-radius:2px;width:${Math.round(rs.progress * 100)}%`
+        barBg.appendChild(bar)
+        section.appendChild(barBg)
+      }
+
       for (const sigil of page.sigils) {
-        section.appendChild(this._sigilEntry(sigil))
+        section.appendChild(this._sigilEntry(sigil, demon?.name ?? page.demonId, rs))
       }
       content.appendChild(section)
     }
   }
 
-  private _sigilEntry(sigil: Sigil): HTMLDivElement {
+  private _sigilEntry(
+    sigil: Sigil,
+    demonName: string,
+    researchState: ResearchState | null,
+  ): HTMLDivElement {
     const entry = el('div', 'sigil-entry')
 
     const dot = el('div', 's-state')
@@ -536,6 +733,15 @@ export class UIManager {
     meta.appendChild(status)
     entry.appendChild(dot)
     entry.appendChild(meta)
+
+    const studyBtn = el('button', 's-study-btn')
+    studyBtn.textContent = 'Study'
+    studyBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      this.showStudy(sigil, demonName, researchState)
+    })
+    entry.appendChild(studyBtn)
+
     return entry
   }
 

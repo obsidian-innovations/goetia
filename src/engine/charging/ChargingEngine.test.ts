@@ -103,7 +103,7 @@ describe('tick', () => {
   })
 
   it('decays when idle for more than 60 seconds', () => {
-    const required = getRequiredChargeTime('Baron') // 480_000
+    // getRequiredChargeTime('Baron') = 480_000
     // Start at 50% progress manually
     const state = makeState('Baron', 0)
     const halfwayState = { ...state, chargeProgress: 0.5, lastAttentionAt: 0 }

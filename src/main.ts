@@ -11,6 +11,8 @@ import { getDemon } from '@engine/demons/DemonRegistry'
 import { generateDemand } from '@engine/demands/DemandEngine'
 import { getNextGesture } from '@engine/charging/AttentionGesture'
 import { SigilLifecycleManager } from '@engine/sigil/SigilLifecycle'
+import { useResearchStore } from '@stores/researchStore'
+import { completedRitual, studiedSigil } from '@engine/research/ResearchActivities'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -18,11 +20,13 @@ async function init(): Promise<void> {
   // ── UI overlay first — visible even if PixiJS fails ─────────────────────
   const ui = new UIManager()
 
-  // Load grimoire from localStorage
+  // Load grimoire and research from localStorage
   useGrimoireStore.getState().load()
+  useResearchStore.getState().load()
 
   // Show demon select immediately so the user sees something
   ui.showDemonSelect()
+  ui.refreshDemonGrid()
 
   // ── PixiJS application ────────────────────────────────────────────────────
   const app = new Application()
@@ -48,6 +52,9 @@ async function init(): Promise<void> {
   ui.setCallbacks({
     onDemonSelect(demonId: string) {
       ritualCanvas.setDemon(demonId)
+      // Apply partial seal geometry based on research progress
+      const visibleGeom = useResearchStore.getState().getVisibleGeometry(demonId)
+      ritualCanvas.setVisibleGeometry(visibleGeom)
     },
 
     onPhaseChange(phase) {
@@ -69,8 +76,15 @@ async function init(): Promise<void> {
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
 
-      // Start charging if a demon is selected
+      // Award research XP for completing the ritual
       const demonId = useCanvasStore.getState().currentDemonId
+      if (demonId) {
+        const xp = completedRitual(completedSigil.overallIntegrity)
+        useResearchStore.getState().addProgress(demonId, xp)
+        ui.refreshDemonGrid()
+      }
+
+      // Start charging if a demon is selected
       if (demonId) {
         try {
           const demon = getDemon(demonId)
@@ -96,6 +110,16 @@ async function init(): Promise<void> {
 
     onIgnoreDemand(_demandId: string) {
       // Demand ignored — could trigger escalation in a future update
+    },
+
+    onStudySigil(_sigilId: string, demonId: string) {
+      // Award research XP for studying a sigil (sigil object not needed; fixed XP)
+      const page = useGrimoireStore.getState().getPageForDemon(demonId)
+      const sigil = page?.sigils.find(s => s.id === _sigilId)
+      if (sigil) {
+        useResearchStore.getState().addProgress(demonId, studiedSigil(sigil))
+        ui.refreshDemonGrid()
+      }
     },
   })
 
