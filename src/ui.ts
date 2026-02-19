@@ -158,6 +158,16 @@ const STYLE = `
     font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase;
     color: #887799; white-space: nowrap;
   }
+  #glyph-toggle-btn {
+    display: none;
+    padding: 0.45rem 1.1rem; border: 1px solid #442255; background: rgba(30,10,50,0.7);
+    color: #997799; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+    transition: all 0.2s;
+  }
+  #glyph-toggle-btn.visible { display: block; }
+  #glyph-toggle-btn:hover { border-color: #7733aa; color: #cc88ff; }
+  #glyph-toggle-btn.open { border-color: #aa66ff; background: rgba(80,20,130,0.7); color: #ddb8ff; }
 
   /* ── Grimoire ── */
   #screen-grimoire { background: rgba(8,7,15,0.95); pointer-events: all; }
@@ -1099,7 +1109,7 @@ export class UIManager {
     spacer.style.flex = '1'
     screen.appendChild(spacer)
 
-    // Glyph reference panel (visible only in GLYPH phase)
+    // Glyph reference panel (hidden by default; toggled via button in toolbar)
     screen.appendChild(this._buildGlyphReference())
 
     // Toolbar
@@ -1115,6 +1125,18 @@ export class UIManager {
       })
       toolbar.appendChild(btn)
     }
+
+    // Glyph reference toggle button (only shown in GLYPH phase)
+    const glyphToggle = el('button', '', 'glyph-toggle-btn')
+    glyphToggle.textContent = 'Glyphs ▾'
+    glyphToggle.addEventListener('click', () => {
+      const panel = screen.querySelector<HTMLElement>('#glyph-ref-panel')
+      if (!panel) return
+      const open = panel.classList.toggle('visible')
+      glyphToggle.classList.toggle('open', open)
+      glyphToggle.textContent = open ? 'Glyphs ▴' : 'Glyphs ▾'
+    })
+    toolbar.appendChild(glyphToggle)
 
     const bindBtn = el('button', '', 'bind-btn')
     bindBtn.textContent = 'Bind'
@@ -1809,8 +1831,18 @@ export class UIManager {
       const btn = this._root.querySelector<HTMLElement>(`#phase-btn-${phase}`)
       if (btn) btn.classList.toggle('active', phase === active)
     }
-    const refPanel = this._root.querySelector<HTMLElement>('#glyph-ref-panel')
-    if (refPanel) refPanel.classList.toggle('visible', active === 'GLYPH')
+    const toggleBtn = this._root.querySelector<HTMLElement>('#glyph-toggle-btn')
+    const refPanel  = this._root.querySelector<HTMLElement>('#glyph-ref-panel')
+    const inGlyph = active === 'GLYPH'
+    if (toggleBtn) toggleBtn.classList.toggle('visible', inGlyph)
+    if (!inGlyph && refPanel) {
+      // Collapse panel when leaving GLYPH phase
+      refPanel.classList.remove('visible')
+      if (toggleBtn) {
+        toggleBtn.classList.remove('open')
+        toggleBtn.textContent = 'Glyphs ▾'
+      }
+    }
   }
 
   // ─── Store subscription ───────────────────────────────────────────────────
