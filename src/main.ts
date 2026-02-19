@@ -16,6 +16,8 @@ import { completedRitual, studiedSigil } from '@engine/research/ResearchActiviti
 import { useWorldStore } from '@stores/worldStore'
 import { getCurrentPosition, watchPosition, queryPermission } from './services/geolocation'
 import { calculateInterference } from '@engine/world/Encounters'
+import { usePvPStore } from '@stores/pvpStore'
+import { networkService } from './services/network'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -140,6 +142,11 @@ async function init(): Promise<void> {
         }
       })
     },
+
+    onCreateCoven(name: string) {
+      usePvPStore.getState().createCoven(name)
+      ui.updateCoven(usePvPStore.getState().covenState)
+    },
   })
 
   // ── Geolocation setup ─────────────────────────────────────────────────────
@@ -172,6 +179,26 @@ async function init(): Promise<void> {
     } else {
       ritualCanvas.setDistortionIntensity(0)
     }
+  })
+
+  // ── PvP store subscription ─────────────────────────────────────────────────
+  usePvPStore.subscribe((pvpState) => {
+    ui.updatePvP(pvpState.activeHexes, pvpState.activeWards)
+    ui.updateCoven(pvpState.covenState)
+    if (pvpState.lastClashResult) {
+      ui.updateClashResult(pvpState.lastClashResult, 'Attacker', 'Defender', 0, 0)
+    }
+  })
+
+  // ── Network callbacks ──────────────────────────────────────────────────────
+  networkService.setCallbacks({
+    onClashResult(result, _challengeId) {
+      usePvPStore.getState().setLastClashResult(result)
+      ui.showClash()
+    },
+    onIncomingHex(hex) {
+      usePvPStore.getState().receiveIncomingHex(hex)
+    },
   })
 
   // ── Store-driven feedback ─────────────────────────────────────────────────
@@ -218,6 +245,9 @@ async function init(): Promise<void> {
     useChargingStore.getState().tickAll(now, chargeMultiplier)
     // Tick world decay as well
     useWorldStore.getState().tick(now)
+
+    // Tick PvP (expire old hexes/wards)
+    usePvPStore.getState().tick(now)
 
     // Update charging UI if visible
     const charges = useChargingStore.getState().activeCharges

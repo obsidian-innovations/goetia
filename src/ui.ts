@@ -9,6 +9,9 @@ import type { DemonicDemand } from '@engine/demands/DemandEngine'
 import type { ResearchState } from '@engine/research/ResearchEngine'
 import type { ThinPlace } from '@engine/world/ThinPlaces'
 import { bearingDeg, compassLabel } from '@engine/world/ThinPlaces'
+import type { ClashResult } from '@engine/pvp/ClashResolver'
+import type { Hex } from '@engine/pvp/HexSystem'
+import type { CovenState } from '@engine/social/CovenEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -21,6 +24,9 @@ export interface UICallbacks {
   onIgnoreDemand?: (demandId: string) => void
   onStudySigil?: (sigilId: string, demonId: string) => void
   onRequestLocation?: () => void
+  onCastHex?: (targetLabel: string, sigilId: string) => void
+  onCastWard?: (sigilId: string) => void
+  onCreateCoven?: (name: string) => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -314,6 +320,15 @@ const STYLE = `
     transition: border-color 0.2s, color 0.2s;
   }
   #map-btn:hover { border-color: #7733aa; color: #cc88ff; }
+  #pvp-btn, #coven-btn {
+    margin: 0; padding: 0.5rem 1.2rem;
+    background: transparent; border: 1px solid #331144;
+    color: #776688; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #pvp-btn:hover { border-color: #aa3322; color: #ff8866; }
+  #coven-btn:hover { border-color: #4466aa; color: #88bbff; }
   #charging-place-wrap {
     background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px;
     padding: 0.75rem; display: none; flex-direction: column; gap: 0.3rem;
@@ -322,6 +337,130 @@ const STYLE = `
   #charging-place-label { font-size: 0.8rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
   #charging-place-name { font-size: 0.85rem; color: #cc88ff; }
   #charging-place-boost { font-size: 0.75rem; color: #88cc44; }
+
+  /* ── PvP (Hex/Ward) ── */
+  #screen-pvp { background: rgba(8,7,15,0.97); pointer-events: all; }
+  #pvp-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #pvp-header h2 { flex: 1; text-align: center; color: #ff8866; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #pvp-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #pvp-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #pvp-content { flex: 1; display: flex; flex-direction: column; padding: 0.75rem; gap: 0.75rem; overflow-y: auto; }
+  .pvp-section-title {
+    font-size: 0.75rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.25rem;
+  }
+  .pvp-entry {
+    background: rgba(30,8,15,0.7); border: 1px solid #331122; border-radius: 6px;
+    padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.2rem;
+  }
+  .pvp-entry.ward { border-color: #113322; background: rgba(8,20,15,0.7); }
+  .pvp-entry .pe-type { font-size: 0.65rem; color: #cc4422; text-transform: uppercase; letter-spacing: 0.1em; }
+  .pvp-entry.ward .pe-type { color: #44cc88; }
+  .pvp-entry .pe-integrity { font-size: 0.8rem; color: #ccaaaa; }
+  .pvp-entry.ward .pe-integrity { color: #aaccaa; }
+  .pvp-entry .pe-expires { font-size: 0.65rem; color: #553333; }
+  .pvp-empty { font-size: 0.8rem; color: #443333; font-style: italic; text-align: center; padding: 0.75rem 0; }
+  #pvp-btn {
+    margin: 0; padding: 0.5rem 1.2rem;
+    background: transparent; border: 1px solid #441122;
+    color: #994433; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #pvp-btn:hover { border-color: #aa3322; color: #ff8866; }
+
+  /* ── Clash ── */
+  #screen-clash { background: rgba(8,7,15,0.97); pointer-events: all; }
+  #clash-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #clash-header h2 { flex: 1; text-align: center; color: #ff8866; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #clash-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #clash-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #clash-content {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    padding: 1.5rem 1rem; gap: 1.5rem;
+  }
+  #clash-versus { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 0.75rem; }
+  .clash-side {
+    flex: 1; background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px;
+    padding: 0.75rem; display: flex; flex-direction: column; gap: 0.3rem;
+  }
+  .clash-side.winner { border-color: #aa66ff; box-shadow: 0 0 12px rgba(170,100,255,0.3); }
+  .clash-side.loser { border-color: #331122; opacity: 0.7; }
+  .clash-side .cs-role { font-size: 0.65rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
+  .clash-side .cs-name { font-size: 1rem; color: #ddc0ff; }
+  .clash-side .cs-integrity { font-size: 0.75rem; color: #997799; }
+  #clash-vs-divider { font-size: 1.4rem; color: #661133; flex-shrink: 0; }
+  #clash-outcome {
+    text-align: center; padding: 0.75rem 1.5rem; border-radius: 8px;
+    border: 1px solid #441133; background: rgba(30,5,15,0.8);
+  }
+  #clash-outcome .co-label { font-size: 0.65rem; color: #997799; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.4rem; }
+  #clash-outcome .co-outcome {
+    font-size: 1.1rem; color: #ff8866; letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+  #clash-outcome .co-details { font-size: 0.8rem; color: #997799; font-style: italic; line-height: 1.45; }
+  #clash-outcome .co-score { font-size: 0.75rem; color: #665566; margin-top: 0.4rem; }
+
+  /* ── Coven ── */
+  #screen-coven { background: rgba(8,7,15,0.97); pointer-events: all; }
+  #coven-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #coven-header h2 { flex: 1; text-align: center; color: #88bbff; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #coven-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #coven-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #coven-content { flex: 1; display: flex; flex-direction: column; padding: 0.75rem; gap: 0.75rem; overflow-y: auto; }
+  #coven-name { font-size: 1.1rem; color: #aaccff; text-align: center; letter-spacing: 0.1em; }
+  #coven-no-coven { text-align: center; color: #443355; font-size: 0.85rem; margin-top: 1rem; }
+  #coven-create-form { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
+  #coven-create-input {
+    width: 100%; max-width: 280px; padding: 0.5rem 0.75rem;
+    background: rgba(20,5,35,0.8); border: 1px solid #331144; border-radius: 4px;
+    color: #cbb8dd; font-family: inherit; font-size: 0.85rem;
+  }
+  #coven-create-input::placeholder { color: #554466; }
+  #coven-create-btn {
+    padding: 0.5rem 1.5rem; border: 1px solid #334466; background: rgba(10,20,50,0.7);
+    color: #88bbff; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em;
+    transition: all 0.2s;
+  }
+  #coven-create-btn:hover { border-color: #6688cc; color: #aaddff; }
+  .coven-member {
+    background: rgba(15,10,30,0.7); border: 1px solid #221133; border-radius: 5px;
+    padding: 0.4rem 0.75rem; font-size: 0.8rem; color: #9999bb;
+  }
+  .coven-sigil-entry {
+    background: rgba(20,8,35,0.7); border: 1px solid #2a0a40; border-radius: 6px;
+    padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #bb99cc;
+  }
+  #coven-btn {
+    margin: 0; padding: 0.5rem 1.2rem;
+    background: transparent; border: 1px solid #223344;
+    color: #556677; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #coven-btn:hover { border-color: #4466aa; color: #88bbff; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -518,6 +657,128 @@ export class UIManager {
     }
   }
 
+  // ─── PvP screens ────────────────────────────────────────────────────────
+
+  showClash(): void {
+    this._show('clash')
+  }
+
+  /** Populate the clash screen with the result of a finished clash. */
+  updateClashResult(
+    result: ClashResult,
+    attackerName: string,
+    defenderName: string,
+    attackerIntegrity: number,
+    defenderIntegrity: number,
+  ): void {
+    const attackerEl = this._root.querySelector<HTMLElement>('#clash-attacker-name')
+    const defenderEl = this._root.querySelector<HTMLElement>('#clash-defender-name')
+    const atkIntEl   = this._root.querySelector<HTMLElement>('#clash-attacker-integrity')
+    const defIntEl   = this._root.querySelector<HTMLElement>('#clash-defender-integrity')
+    const outcomeEl  = this._root.querySelector<HTMLElement>('#clash-outcome-text')
+    const detailsEl  = this._root.querySelector<HTMLElement>('#clash-outcome-details')
+    const scoreEl    = this._root.querySelector<HTMLElement>('#clash-outcome-score')
+    const atkSide    = this._root.querySelector<HTMLElement>('#clash-attacker-side')
+    const defSide    = this._root.querySelector<HTMLElement>('#clash-defender-side')
+
+    if (attackerEl) attackerEl.textContent = attackerName
+    if (defenderEl) defenderEl.textContent = defenderName
+    if (atkIntEl)   atkIntEl.textContent = `Integrity ${Math.round(attackerIntegrity * 100)}%`
+    if (defIntEl)   defIntEl.textContent = `Integrity ${Math.round(defenderIntegrity * 100)}%`
+    if (outcomeEl)  outcomeEl.textContent = result.outcome.replace(/_/g, ' ').toUpperCase()
+    if (detailsEl)  detailsEl.textContent = result.details
+    if (scoreEl)    scoreEl.textContent = `Score: ${result.score >= 0 ? '+' : ''}${result.score.toFixed(2)}`
+
+    if (atkSide) {
+      atkSide.classList.toggle('winner', result.winner === 'attacker')
+      atkSide.classList.toggle('loser', result.winner === 'defender')
+    }
+    if (defSide) {
+      defSide.classList.toggle('winner', result.winner === 'defender')
+      defSide.classList.toggle('loser', result.winner === 'attacker')
+    }
+  }
+
+  showPvP(): void {
+    this._show('pvp')
+  }
+
+  /** Refresh the hex/ward management screen with current lists. */
+  updatePvP(hexes: Hex[], wards: Hex[]): void {
+    const hexList  = this._root.querySelector<HTMLElement>('#pvp-hex-list')
+    const wardList = this._root.querySelector<HTMLElement>('#pvp-ward-list')
+
+    if (hexList) {
+      hexList.innerHTML = ''
+      if (hexes.length === 0) {
+        const empty = el('div', 'pvp-empty')
+        empty.textContent = 'No active hexes'
+        hexList.appendChild(empty)
+      } else {
+        for (const hex of hexes) {
+          hexList.appendChild(this._buildPvPEntry(hex))
+        }
+      }
+    }
+
+    if (wardList) {
+      wardList.innerHTML = ''
+      if (wards.length === 0) {
+        const empty = el('div', 'pvp-empty')
+        empty.textContent = 'No active wards'
+        wardList.appendChild(empty)
+      } else {
+        for (const ward of wards) {
+          wardList.appendChild(this._buildPvPEntry(ward))
+        }
+      }
+    }
+  }
+
+  showCoven(): void {
+    this._show('coven')
+  }
+
+  /** Refresh the coven screen. Pass null when not in a coven. */
+  updateCoven(covenState: CovenState | null): void {
+    const nameEl    = this._root.querySelector<HTMLElement>('#coven-name')
+    const noCovenEl = this._root.querySelector<HTMLElement>('#coven-no-coven')
+    const createEl  = this._root.querySelector<HTMLElement>('#coven-create-form')
+    const membersEl = this._root.querySelector<HTMLElement>('#coven-members-list')
+    const grimoireEl = this._root.querySelector<HTMLElement>('#coven-grimoire-list')
+
+    if (!covenState) {
+      if (nameEl)    nameEl.textContent = ''
+      if (noCovenEl) noCovenEl.style.display = 'block'
+      if (createEl)  createEl.style.display = 'flex'
+      if (membersEl) membersEl.innerHTML = ''
+      if (grimoireEl) grimoireEl.innerHTML = ''
+      return
+    }
+
+    if (noCovenEl) noCovenEl.style.display = 'none'
+    if (createEl)  createEl.style.display = 'none'
+    if (nameEl)    nameEl.textContent = covenState.coven.name
+
+    if (membersEl) {
+      membersEl.innerHTML = ''
+      for (const id of covenState.coven.members) {
+        const m = el('div', 'coven-member')
+        m.textContent = id
+        membersEl.appendChild(m)
+      }
+    }
+
+    if (grimoireEl) {
+      grimoireEl.innerHTML = ''
+      for (const sigil of covenState.coven.sharedGrimoire) {
+        const s = el('div', 'coven-sigil-entry')
+        s.textContent = `${sigil.demonId} — ${Math.round(sigil.overallIntegrity * 100)}% integrity`
+        grimoireEl.appendChild(s)
+      }
+    }
+  }
+
   updateChargingProgress(progress: number): void {
     const bar = this._root.querySelector<HTMLElement>('#charging-progress-bar')
     const pct = this._root.querySelector<HTMLElement>('#charging-progress-pct')
@@ -592,6 +853,9 @@ export class UIManager {
     this._screens.charging = this._buildCharging()
     this._screens.study = this._buildStudy()
     this._screens.world = this._buildWorld()
+    this._screens.clash = this._buildClash()
+    this._screens.pvp = this._buildPvP()
+    this._screens.coven = this._buildCoven()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -620,6 +884,16 @@ export class UIManager {
     mapBtn.textContent = 'Map'
     mapBtn.addEventListener('click', () => this.showWorld())
     btnRow.appendChild(mapBtn)
+
+    const pvpBtn = el('button', '', 'pvp-btn')
+    pvpBtn.textContent = 'PvP'
+    pvpBtn.addEventListener('click', () => this.showPvP())
+    btnRow.appendChild(pvpBtn)
+
+    const covenBtn = el('button', '', 'coven-btn')
+    covenBtn.textContent = 'Coven'
+    covenBtn.addEventListener('click', () => this.showCoven())
+    btnRow.appendChild(covenBtn)
 
     screen.appendChild(btnRow)
 
@@ -931,6 +1205,187 @@ export class UIManager {
     entry.appendChild(dot)
     entry.appendChild(meta)
     return entry
+  }
+
+  // ─── PvP screen builders ────────────────────────────────────────────────
+
+  private _buildClash(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-clash')
+
+    const header = el('div', '', 'clash-header')
+    const backBtn = el('button', '', 'clash-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => this.showPvP())
+    const h2 = el('h2')
+    h2.textContent = 'Clash'
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'clash-content')
+
+    // Versus display
+    const versus = el('div', '', 'clash-versus')
+
+    const atkSide = el('div', 'clash-side', 'clash-attacker-side')
+    const atkRole = el('div', 'cs-role')
+    atkRole.textContent = 'Attacker'
+    const atkName = el('div', 'cs-name', 'clash-attacker-name')
+    const atkInt  = el('div', 'cs-integrity', 'clash-attacker-integrity')
+    atkSide.appendChild(atkRole)
+    atkSide.appendChild(atkName)
+    atkSide.appendChild(atkInt)
+
+    const divider = el('div', '', 'clash-vs-divider')
+    divider.textContent = '⚔'
+
+    const defSide = el('div', 'clash-side', 'clash-defender-side')
+    const defRole = el('div', 'cs-role')
+    defRole.textContent = 'Defender'
+    const defName = el('div', 'cs-name', 'clash-defender-name')
+    const defInt  = el('div', 'cs-integrity', 'clash-defender-integrity')
+    defSide.appendChild(defRole)
+    defSide.appendChild(defName)
+    defSide.appendChild(defInt)
+
+    versus.appendChild(atkSide)
+    versus.appendChild(divider)
+    versus.appendChild(defSide)
+    content.appendChild(versus)
+
+    // Outcome card
+    const outcomeCard = el('div', '', 'clash-outcome')
+    const coLabel   = el('div', 'co-label')
+    coLabel.textContent = 'Outcome'
+    const coOutcome = el('div', 'co-outcome', 'clash-outcome-text')
+    const coDetails = el('div', 'co-details', 'clash-outcome-details')
+    const coScore   = el('div', 'co-score', 'clash-outcome-score')
+    outcomeCard.appendChild(coLabel)
+    outcomeCard.appendChild(coOutcome)
+    outcomeCard.appendChild(coDetails)
+    outcomeCard.appendChild(coScore)
+    content.appendChild(outcomeCard)
+
+    screen.appendChild(content)
+    return screen
+  }
+
+  private _buildPvP(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-pvp')
+
+    const header = el('div', '', 'pvp-header')
+    const backBtn = el('button', '', 'pvp-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => this.showDemonSelect())
+    const h2 = el('h2')
+    h2.textContent = 'Hexes & Wards'
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'pvp-content')
+
+    // Active hexes
+    const hexTitle = el('div', 'pvp-section-title')
+    hexTitle.textContent = 'Active Hexes'
+    content.appendChild(hexTitle)
+    const hexList = el('div', '', 'pvp-hex-list')
+    content.appendChild(hexList)
+
+    // Active wards
+    const wardTitle = el('div', 'pvp-section-title')
+    wardTitle.style.marginTop = '0.75rem'
+    wardTitle.textContent = 'Active Wards'
+    content.appendChild(wardTitle)
+    const wardList = el('div', '', 'pvp-ward-list')
+    content.appendChild(wardList)
+
+    // Last clash result link
+    const clashBtn = el('button', '', 'pvp-last-clash-btn')
+    clashBtn.style.cssText = 'margin-top:0.75rem;padding:0.4rem 1rem;border:1px solid #441133;background:transparent;color:#994433;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;align-self:center;'
+    clashBtn.textContent = 'View Last Clash'
+    clashBtn.addEventListener('click', () => this.showClash())
+    content.appendChild(clashBtn)
+
+    screen.appendChild(content)
+    return screen
+  }
+
+  private _buildPvPEntry(hex: Hex): HTMLDivElement {
+    const entry = el('div', `pvp-entry${hex.type === 'ward' ? ' ward' : ''}`)
+
+    const typeEl = el('div', 'pe-type')
+    typeEl.textContent = hex.type.toUpperCase()
+
+    const intEl = el('div', 'pe-integrity')
+    intEl.textContent = `Integrity ${Math.round(hex.sigil.overallIntegrity * 100)}% — ${hex.demon.name}`
+
+    const expEl = el('div', 'pe-expires')
+    const remainingMs = hex.expiresAt - Date.now()
+    const remainingH = Math.max(0, Math.round(remainingMs / (60 * 60 * 1000)))
+    expEl.textContent = `Expires in ~${remainingH}h`
+
+    entry.appendChild(typeEl)
+    entry.appendChild(intEl)
+    entry.appendChild(expEl)
+    return entry
+  }
+
+  private _buildCoven(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-coven')
+
+    const header = el('div', '', 'coven-header')
+    const backBtn = el('button', '', 'coven-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => this.showDemonSelect())
+    const h2 = el('h2')
+    h2.textContent = 'Coven'
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'coven-content')
+
+    // Coven name display
+    const nameEl = el('div', '', 'coven-name')
+    content.appendChild(nameEl)
+
+    // "No coven" message + create form
+    const noCovenEl = el('div', '', 'coven-no-coven')
+    noCovenEl.textContent = 'You are not in a coven.'
+    content.appendChild(noCovenEl)
+
+    const createForm = el('div', '', 'coven-create-form')
+    const input = el('input', '', 'coven-create-input') as unknown as HTMLInputElement
+    input.type = 'text'
+    input.placeholder = 'Coven name…'
+    const createBtn = el('button', '', 'coven-create-btn')
+    createBtn.textContent = 'Found Coven'
+    createBtn.addEventListener('click', () => {
+      const name = input.value.trim()
+      if (name) this._callbacks?.onCreateCoven?.(name)
+    })
+    createForm.appendChild(input)
+    createForm.appendChild(createBtn)
+    content.appendChild(createForm)
+
+    // Members section
+    const membersTitle = el('div', 'pvp-section-title')
+    membersTitle.textContent = 'Members'
+    content.appendChild(membersTitle)
+    const membersList = el('div', '', 'coven-members-list')
+    content.appendChild(membersList)
+
+    // Shared grimoire section
+    const grimoireTitle = el('div', 'pvp-section-title')
+    grimoireTitle.style.marginTop = '0.75rem'
+    grimoireTitle.textContent = 'Shared Grimoire'
+    content.appendChild(grimoireTitle)
+    const grimoireList = el('div', '', 'coven-grimoire-list')
+    content.appendChild(grimoireList)
+
+    screen.appendChild(content)
+    return screen
   }
 
   private _startRadar(): void {
