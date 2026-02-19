@@ -18,6 +18,8 @@ import { getCurrentPosition, watchPosition, queryPermission } from './services/g
 import { calculateInterference } from '@engine/world/Encounters'
 import { usePvPStore } from '@stores/pvpStore'
 import { networkService } from './services/network'
+import { useCorruptionStore } from '@stores/corruptionStore'
+import { getCorruptionAmount } from '@engine/corruption/CorruptionEngine'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -105,6 +107,10 @@ async function init(): Promise<void> {
           const demand = generateDemand(demon, completedSigil.overallIntegrity)
           useChargingStore.getState().addDemand(demon.id, demand)
 
+          // Casting a sigil adds corruption proportional to the demon's rank
+          const castAmount = getCorruptionAmount('sigil_cast', demon.rank)
+          useCorruptionStore.getState().addCorruption({ type: 'sigil_cast', amount: castAmount, timestamp: Date.now() })
+
           ui.showCharging(demon.name)
           return
         } catch {
@@ -120,7 +126,15 @@ async function init(): Promise<void> {
     },
 
     onIgnoreDemand(_demandId: string) {
-      // Demand ignored — could trigger escalation in a future update
+      // Ignoring a demand adds corruption based on the current demon's rank
+      const demonId = useCanvasStore.getState().currentDemonId
+      if (demonId) {
+        try {
+          const demon = getDemon(demonId)
+          const amount = getCorruptionAmount('demand_ignored', demon.rank)
+          useCorruptionStore.getState().addCorruption({ type: 'demand_ignored', amount, timestamp: Date.now() })
+        } catch { /* demon not found */ }
+      }
     },
 
     onStudySigil(_sigilId: string, demonId: string) {
@@ -190,6 +204,27 @@ async function init(): Promise<void> {
     }
   })
 
+  // ── Corruption store subscription ─────────────────────────────────────────
+  let _wasVessel = false
+  useCorruptionStore.subscribe((corruptionState) => {
+    const { level, stage } = corruptionState.corruption
+    ui.updateCorruption(level, stage)
+
+    // Show whisper if one is queued
+    if (corruptionState.pendingWhisper) {
+      const w = corruptionState.pendingWhisper
+      ui.showWhisper(w.text, w.intensity)
+      useCorruptionStore.getState().clearWhisper()
+    }
+
+    // Show vessel warning once when transitioning to vessel
+    const isVesselNow = level >= 1.0
+    if (isVesselNow && !_wasVessel) {
+      ui.showVesselWarning()
+    }
+    _wasVessel = isVesselNow
+  })
+
   // ── Network callbacks ──────────────────────────────────────────────────────
   networkService.setCallbacks({
     onClashResult(result, _challengeId) {
@@ -248,6 +283,9 @@ async function init(): Promise<void> {
 
     // Tick PvP (expire old hexes/wards)
     usePvPStore.getState().tick(now)
+
+    // Tick corruption (whisper generation)
+    useCorruptionStore.getState().tick(now)
 
     // Update charging UI if visible
     const charges = useChargingStore.getState().activeCharges

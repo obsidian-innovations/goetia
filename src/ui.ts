@@ -1,4 +1,6 @@
 import { listDemons, STARTER_DEMON_ID } from '@engine/demons/DemonRegistry'
+import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
+import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
 import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
@@ -461,6 +463,54 @@ const STYLE = `
     transition: border-color 0.2s, color 0.2s;
   }
   #coven-btn:hover { border-color: #4466aa; color: #88bbff; }
+
+  /* ── Corruption bar ── */
+  #corruption-bar-wrap {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 4px; z-index: 100; pointer-events: none;
+    background: rgba(0,0,0,0.3);
+    display: none;
+  }
+  #corruption-bar-wrap.visible { display: block; }
+  #corruption-bar {
+    height: 100%; background: #aa0000;
+    transition: width 1s ease, background-color 0.5s ease;
+    width: 0%;
+  }
+  #corruption-bar.tainted   { background: #881100; }
+  #corruption-bar.compromised { background: #cc2200; }
+  #corruption-bar.vessel    { background: #ff0000; box-shadow: 0 0 6px #ff0000; }
+
+  /* ── Whisper overlay ── */
+  #whisper-overlay {
+    position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+    max-width: 320px; width: 90%; z-index: 200; pointer-events: none;
+    text-align: center; font-style: italic; letter-spacing: 0.04em;
+    padding: 0.6rem 1rem; border-radius: 6px;
+    background: rgba(30,0,0,0.75); border: 1px solid #550000;
+    color: #cc6666; font-size: 0.85rem; line-height: 1.5;
+    opacity: 0; transition: opacity 0.4s ease;
+  }
+  #whisper-overlay.visible { opacity: 1; }
+  #whisper-overlay.medium { color: #dd4444; border-color: #880000; }
+  #whisper-overlay.high   { color: #ff3333; border-color: #cc0000; background: rgba(60,0,0,0.85); }
+
+  /* ── Vessel warning ── */
+  #vessel-warning {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 300;
+    background: rgba(80,0,0,0.7); display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem;
+    pointer-events: all;
+  }
+  #vessel-warning.visible { display: flex; }
+  #vessel-warning h2 { color: #ff4444; font-size: 1.6rem; letter-spacing: 0.2em; text-transform: uppercase; margin: 0; }
+  #vessel-warning p { color: #cc8888; font-size: 0.9rem; text-align: center; max-width: 260px; margin: 0; line-height: 1.6; }
+  #vessel-warning-dismiss {
+    padding: 0.5rem 1.5rem; border: 1px solid #cc2222; background: rgba(80,0,0,0.7);
+    color: #ff6666; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  #vessel-warning-dismiss:hover { border-color: #ff4444; color: #ffaaaa; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -477,6 +527,12 @@ export class UIManager {
   private _worldNearbyPlaces: ThinPlace[] = []
   private _worldCurrentPlace: ThinPlace | null = null
   private _worldPlayerPos: { lat: number; lng: number } | null = null
+  // Corruption overlays
+  private _corruptionBarWrap: HTMLDivElement | null = null
+  private _corruptionBar: HTMLDivElement | null = null
+  private _whisperOverlay: HTMLDivElement | null = null
+  private _whisperTimeout: ReturnType<typeof setTimeout> | null = null
+  private _vesselWarning: HTMLDivElement | null = null
 
   constructor() {
     this._injectStyles()
@@ -484,6 +540,7 @@ export class UIManager {
     this._root.id = 'goetia-ui'
     document.body.appendChild(this._root)
     this._buildScreens()
+    this._buildCorruptionOverlays()
     this._subscribeToStore()
   }
 
@@ -838,9 +895,40 @@ export class UIManager {
     this._updatePhaseButtons(phase)
   }
 
+  /** Update the persistent corruption bar. */
+  updateCorruption(level: number, stage: CorruptionStage): void {
+    if (!this._corruptionBarWrap || !this._corruptionBar) return
+    const visible = level > 0
+    this._corruptionBarWrap.classList.toggle('visible', visible)
+    this._corruptionBar.style.width = `${Math.round(level * 100)}%`
+    this._corruptionBar.className = stage !== 'clean' ? stage : ''
+  }
+
+  /** Flash a whisper message and auto-fade after 4 s. */
+  showWhisper(text: string, intensity: WhisperIntensity = 'low'): void {
+    const overlay = this._whisperOverlay
+    if (!overlay) return
+    if (this._whisperTimeout !== null) {
+      clearTimeout(this._whisperTimeout)
+      this._whisperTimeout = null
+    }
+    overlay.textContent = text
+    overlay.className = `visible ${intensity}`
+    this._whisperTimeout = setTimeout(() => {
+      overlay.classList.remove('visible')
+      this._whisperTimeout = null
+    }, 4_000)
+  }
+
+  /** Show the full-screen vessel warning. */
+  showVesselWarning(): void {
+    this._vesselWarning?.classList.add('visible')
+  }
+
   destroy(): void {
     this._stopRadar()
     this._unsubscribeStore?.()
+    if (this._whisperTimeout !== null) clearTimeout(this._whisperTimeout)
     this._root.remove()
   }
 
@@ -1386,6 +1474,38 @@ export class UIManager {
 
     screen.appendChild(content)
     return screen
+  }
+
+  private _buildCorruptionOverlays(): void {
+    // Corruption bar (fixed at bottom of viewport)
+    const barWrap = document.createElement('div')
+    barWrap.id = 'corruption-bar-wrap'
+    const bar = document.createElement('div')
+    bar.id = 'corruption-bar'
+    barWrap.appendChild(bar)
+    document.body.appendChild(barWrap)
+    this._corruptionBarWrap = barWrap
+    this._corruptionBar = bar
+
+    // Whisper overlay
+    const whisper = document.createElement('div')
+    whisper.id = 'whisper-overlay'
+    document.body.appendChild(whisper)
+    this._whisperOverlay = whisper
+
+    // Vessel warning
+    const vessel = document.createElement('div')
+    vessel.id = 'vessel-warning'
+    vessel.innerHTML = `
+      <h2>You Have Become a Vessel</h2>
+      <p>The corruption is complete. You are now a conduit for demonic forces. Other practitioners may sense your presence.</p>
+      <button id="vessel-warning-dismiss">I Understand</button>
+    `
+    vessel.querySelector('#vessel-warning-dismiss')?.addEventListener('click', () => {
+      vessel.classList.remove('visible')
+    })
+    document.body.appendChild(vessel)
+    this._vesselWarning = vessel
   }
 
   private _startRadar(): void {
