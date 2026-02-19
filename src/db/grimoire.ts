@@ -1,10 +1,18 @@
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
+import type { ResearchState } from '@engine/research/ResearchEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
 export type GrimoirePage = {
   demonId: string
   sigils: Sigil[]
+}
+
+// ─── Storage data model ────────────────────────────────────────────────────
+
+interface GrimoireData {
+  pages: GrimoirePage[]
+  research: Record<string, ResearchState>
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -26,27 +34,43 @@ const STORAGE_KEY = 'goetia:grimoire'
 
 export class GrimoireDB {
   private pages: GrimoirePage[] = []
+  private research: Record<string, ResearchState> = {}
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
   private load(): void {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      this.pages = raw ? (JSON.parse(raw) as GrimoirePage[]) : []
+      if (!raw) {
+        this.pages = []
+        this.research = {}
+        return
+      }
+      const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
+      // Backwards-compatible: old format was a plain GrimoirePage[]
+      if (Array.isArray(parsed)) {
+        this.pages = parsed
+        this.research = {}
+      } else {
+        this.pages = parsed.pages ?? []
+        this.research = parsed.research ?? {}
+      }
     } catch {
       this.pages = []
+      this.research = {}
     }
   }
 
   private persist(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.pages))
+      const data: GrimoireData = { pages: this.pages, research: this.research }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
     }
   }
 
-  // ─── Reads ────────────────────────────────────────────────────────────────
+  // ─── Page reads ───────────────────────────────────────────────────────────
 
   getAll(): GrimoirePage[] {
     this.load()
@@ -69,7 +93,7 @@ export class GrimoireDB {
     return page
   }
 
-  // ─── Writes ───────────────────────────────────────────────────────────────
+  // ─── Page writes ──────────────────────────────────────────────────────────
 
   saveSigil(sigil: Sigil): void {
     this.load()
@@ -99,6 +123,7 @@ export class GrimoireDB {
           )
         }
         sigil.status = newStatus
+        sigil.statusChangedAt = Date.now()
         this.persist()
         return
       }
@@ -120,6 +145,27 @@ export class GrimoireDB {
 
   clearAll(): void {
     this.pages = []
+    this.research = {}
+    this.persist()
+  }
+
+  // ─── Research reads ───────────────────────────────────────────────────────
+
+  getResearch(demonId: string): ResearchState | null {
+    this.load()
+    return this.research[demonId] ?? null
+  }
+
+  getAllResearch(): Record<string, ResearchState> {
+    this.load()
+    return { ...this.research }
+  }
+
+  // ─── Research writes ──────────────────────────────────────────────────────
+
+  saveResearch(state: ResearchState): void {
+    this.load()
+    this.research[state.demonId] = state
     this.persist()
   }
 }

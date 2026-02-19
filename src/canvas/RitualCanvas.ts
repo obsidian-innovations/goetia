@@ -3,6 +3,7 @@ import { AtmosphericLayer } from './AtmosphericLayer'
 import { SealLayer } from './SealLayer'
 import { GlyphLayer } from './GlyphLayer'
 import { BindingRingLayer } from './BindingRingLayer'
+import { DistortionLayer } from './DistortionLayer'
 import { StrokeEvaluator } from '@engine/sigil/StrokeEvaluator'
 import { SealReconstructor } from '@engine/sigil/SealReconstructor'
 import { GlyphRecognizer } from '@engine/sigil/GlyphRecognizer'
@@ -51,6 +52,7 @@ export class RitualCanvas {
   private readonly _sealLayer: SealLayer
   private readonly _glyphLayer: GlyphLayer
   private readonly _ringLayer: BindingRingLayer
+  private readonly _distortionLayer: DistortionLayer
 
   // Engine evaluators (stateless or long-lived)
   private readonly _evaluator = new StrokeEvaluator()
@@ -78,11 +80,13 @@ export class RitualCanvas {
     this._sealLayer = new SealLayer(w, h)
     this._glyphLayer = new GlyphLayer(w, h)
     this._ringLayer = new BindingRingLayer(w, h)
+    this._distortionLayer = new DistortionLayer(w, h)
 
     app.stage.addChild(this._atmospheric)
     app.stage.addChild(this._sealLayer)
     app.stage.addChild(this._glyphLayer)
     app.stage.addChild(this._ringLayer)
+    app.stage.addChild(this._distortionLayer)
 
     this._bindEvents()
   }
@@ -131,11 +135,25 @@ export class RitualCanvas {
     return sigil
   }
 
+  /**
+   * Update the visible (discovered) portion of the seal for partial rendering.
+   * Pass null to show the full geometry (fully researched or starter demon).
+   */
+  setVisibleGeometry(geometry: import('@engine/sigil/Types').SealGeometry | null): void {
+    this._sealLayer.setVisibleGeometry(geometry)
+  }
+
+  /** Set the PvE encounter interference intensity (0 = none, 1 = maximum). */
+  setDistortionIntensity(intensity: number): void {
+    this._distortionLayer.setIntensity(intensity)
+  }
+
   resize(width: number, height: number): void {
     this._atmospheric.resize(width, height)
     this._sealLayer.resize(width, height)
     this._glyphLayer.resize(width, height)
     this._ringLayer.resize(width, height)
+    this._distortionLayer.resize(width, height)
   }
 
   destroy(): void {

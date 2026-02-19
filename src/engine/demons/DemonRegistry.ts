@@ -263,7 +263,257 @@ const VALEFOR: Demon = (() => {
   };
 })();
 
+// ─── Amon — 7th Spirit ────────────────────────────────────────────────────
+// Marquis ruling 40 legions. Appears as a wolf with a serpent's tail, head
+// of an owl wreathed in flame when in human form.
+// Procures love, reconciles friends and foes, reveals the past and future.
+// Geometry: asymmetric arrow-head with a long tail and flanking barbs.
+
+const AMON: Demon = (() => {
+  const n1 = { id: nid('amon-n1'), position: { x: 0.50, y: 0.05 } }; // apex
+  const n2 = { id: nid('amon-n2'), position: { x: 0.85, y: 0.40 } }; // right barb
+  const n3 = { id: nid('amon-n3'), position: { x: 0.65, y: 0.55 } }; // right inner
+  const n4 = { id: nid('amon-n4'), position: { x: 0.50, y: 0.95 } }; // tail tip
+  const n5 = { id: nid('amon-n5'), position: { x: 0.35, y: 0.55 } }; // left inner
+  const n6 = { id: nid('amon-n6'), position: { x: 0.15, y: 0.40 } }; // left barb
+  const nodes = [n1, n2, n3, n4, n5, n6];
+  const edges: SealEdge[] = [
+    mkEdge(n1.id, n1.position, n2.id, n2.position, 0.18), // apex → right barb
+    mkEdge(n2.id, n2.position, n3.id, n3.position, 0.14), // right barb → right inner
+    mkEdge(n3.id, n3.position, n4.id, n4.position, 0.18), // right inner → tail
+    mkEdge(n4.id, n4.position, n5.id, n5.position, 0.18), // tail → left inner
+    mkEdge(n5.id, n5.position, n6.id, n6.position, 0.14), // left inner → left barb
+    mkEdge(n6.id, n6.position, n1.id, n1.position, 0.18), // left barb → apex
+  ];
+  return {
+    id: 'amon',
+    name: 'Amon',
+    rank: 'Marquis',
+    domains: ['discord', 'knowledge'],
+    legions: 40,
+    sealGeometry: { nodes, edges },
+    description:
+      'The seventh spirit of the Ars Goetia, a great marquis commanding ' +
+      '40 legions. He appears as a wolf with a serpent\'s tail, spitting ' +
+      'flames. When in human form his head is like a raven\'s. He tells of ' +
+      'all things past and to come, and reconciles controversies between ' +
+      'friends and foes.',
+  };
+})();
+
+// ─── Barbatos — 8th Spirit ────────────────────────────────────────────────
+// Duke ruling 30 legions. Appears when the sun is in Sagittarius, with four
+// kings and three companies of troops.
+// Gives understanding of animal speech, reveals treasures, knows past & future.
+// Geometry: four-petalled quatrefoil with a hub and outer anchors.
+
+const BARBATOS: Demon = (() => {
+  const n1 = { id: nid('barbatos-n1'), position: { x: 0.50, y: 0.05 } }; // top
+  const n2 = { id: nid('barbatos-n2'), position: { x: 0.95, y: 0.50 } }; // right
+  const n3 = { id: nid('barbatos-n3'), position: { x: 0.50, y: 0.95 } }; // bottom
+  const n4 = { id: nid('barbatos-n4'), position: { x: 0.05, y: 0.50 } }; // left
+  const n5 = { id: nid('barbatos-n5'), position: { x: 0.50, y: 0.50 } }; // center hub
+  const n6 = { id: nid('barbatos-n6'), position: { x: 0.50, y: 0.28 } }; // top inner
+  const n7 = { id: nid('barbatos-n7'), position: { x: 0.72, y: 0.50 } }; // right inner
+  const nodes = [n1, n2, n3, n4, n5, n6, n7];
+  const edges: SealEdge[] = [
+    mkEdge(n1.id, n1.position, n2.id, n2.position, 0.13), // top → right (outer arc)
+    mkEdge(n2.id, n2.position, n3.id, n3.position, 0.13), // right → bottom
+    mkEdge(n3.id, n3.position, n4.id, n4.position, 0.13), // bottom → left
+    mkEdge(n4.id, n4.position, n1.id, n1.position, 0.13), // left → top
+    mkEdge(n5.id, n5.position, n6.id, n6.position, 0.12), // hub → top inner
+    mkEdge(n5.id, n5.position, n7.id, n7.position, 0.12), // hub → right inner
+    mkEdge(n6.id, n6.position, n1.id, n1.position, 0.12), // top inner → top
+    mkEdge(n7.id, n7.position, n2.id, n2.position, 0.12), // right inner → right
+  ];
+  return {
+    id: 'barbatos',
+    name: 'Barbatos',
+    rank: 'Duke',
+    domains: ['knowledge', 'revelation'],
+    legions: 30,
+    sealGeometry: { nodes, edges },
+    description:
+      'The eighth spirit of the Ars Goetia, a great duke commanding ' +
+      '30 legions. He appears with four noble kings and three companies ' +
+      'of troops. He gives understanding of the singing of birds and speaks ' +
+      'with animals, reveals treasures hidden by enchantment, knows the ' +
+      'past and future, and reconciles friends and rulers.',
+  };
+})();
+
+// ─── Paimon — 9th Spirit ──────────────────────────────────────────────────
+// King ruling 200 legions. Appears with a crown, riding a dromedary.
+// Teaches all arts, sciences, and secrets; declares all mysteries.
+// Geometry: crown-like structure — a wide arc with upward spurs and a base.
+
+const PAIMON: Demon = (() => {
+  const n1 = { id: nid('paimon-n1'), position: { x: 0.50, y: 0.05 } }; // crown centre spike
+  const n2 = { id: nid('paimon-n2'), position: { x: 0.25, y: 0.15 } }; // left spike
+  const n3 = { id: nid('paimon-n3'), position: { x: 0.75, y: 0.15 } }; // right spike
+  const n4 = { id: nid('paimon-n4'), position: { x: 0.10, y: 0.55 } }; // left base
+  const n5 = { id: nid('paimon-n5'), position: { x: 0.90, y: 0.55 } }; // right base
+  const n6 = { id: nid('paimon-n6'), position: { x: 0.30, y: 0.85 } }; // lower-left
+  const n7 = { id: nid('paimon-n7'), position: { x: 0.70, y: 0.85 } }; // lower-right
+  const n8 = { id: nid('paimon-n8'), position: { x: 0.50, y: 0.50 } }; // inner hub
+  const nodes = [n1, n2, n3, n4, n5, n6, n7, n8];
+  const edges: SealEdge[] = [
+    mkEdge(n4.id, n4.position, n2.id, n2.position, 0.10), // left base → left spike
+    mkEdge(n2.id, n2.position, n1.id, n1.position, 0.10), // left spike → centre spike
+    mkEdge(n1.id, n1.position, n3.id, n3.position, 0.10), // centre → right spike
+    mkEdge(n3.id, n3.position, n5.id, n5.position, 0.10), // right spike → right base
+    mkEdge(n4.id, n4.position, n6.id, n6.position, 0.10), // left base → lower-left
+    mkEdge(n6.id, n6.position, n7.id, n7.position, 0.10), // lower-left → lower-right
+    mkEdge(n7.id, n7.position, n5.id, n5.position, 0.10), // lower-right → right base
+    mkEdge(n8.id, n8.position, n1.id, n1.position, 0.10), // hub → centre spike
+    mkEdge(n8.id, n8.position, n6.id, n6.position, 0.10), // hub → lower-left
+    mkEdge(n8.id, n8.position, n7.id, n7.position, 0.10), // hub → lower-right
+  ];
+  return {
+    id: 'paimon',
+    name: 'Paimon',
+    rank: 'King',
+    domains: ['knowledge', 'binding'],
+    legions: 200,
+    sealGeometry: { nodes, edges },
+    description:
+      'The ninth spirit of the Ars Goetia, a great king most obedient to ' +
+      'Lucifer, commanding 200 legions. He appears with a crown, riding a ' +
+      'dromedary, preceded by great noise and clamour. He teaches all arts ' +
+      'and sciences, declares all secrets of the earth, and can bind or ' +
+      'make servants of all spirits.',
+  };
+})();
+
+// ─── Buer — 10th Spirit ───────────────────────────────────────────────────
+// President ruling 50 legions. Appears when the sun is in Sagittarius.
+// Teaches philosophy and all virtues of herbs; heals diseases.
+// Geometry: five-spoke wheel — a sun/wheel with outer ring and radiating spokes.
+
+const BUER: Demon = (() => {
+  // Outer ring (5 nodes evenly spaced)
+  const angle = (i: number) => (i * 2 * Math.PI) / 5 - Math.PI / 2;
+  const R = 0.43;
+  const cx = 0.50;
+  const cy = 0.52;
+  const n1 = { id: nid('buer-n1'), position: { x: cx + R * Math.cos(angle(0)), y: cy + R * Math.sin(angle(0)) } };
+  const n2 = { id: nid('buer-n2'), position: { x: cx + R * Math.cos(angle(1)), y: cy + R * Math.sin(angle(1)) } };
+  const n3 = { id: nid('buer-n3'), position: { x: cx + R * Math.cos(angle(2)), y: cy + R * Math.sin(angle(2)) } };
+  const n4 = { id: nid('buer-n4'), position: { x: cx + R * Math.cos(angle(3)), y: cy + R * Math.sin(angle(3)) } };
+  const n5 = { id: nid('buer-n5'), position: { x: cx + R * Math.cos(angle(4)), y: cy + R * Math.sin(angle(4)) } };
+  const n6 = { id: nid('buer-n6'), position: { x: cx, y: cy } }; // hub
+  const nodes = [n1, n2, n3, n4, n5, n6];
+  const edges: SealEdge[] = [
+    mkEdge(n1.id, n1.position, n2.id, n2.position, 0.10), // outer ring
+    mkEdge(n2.id, n2.position, n3.id, n3.position, 0.10),
+    mkEdge(n3.id, n3.position, n4.id, n4.position, 0.10),
+    mkEdge(n4.id, n4.position, n5.id, n5.position, 0.10),
+    mkEdge(n5.id, n5.position, n1.id, n1.position, 0.10),
+    mkEdge(n6.id, n6.position, n1.id, n1.position, 0.10), // spokes
+    mkEdge(n6.id, n6.position, n2.id, n2.position, 0.10),
+    mkEdge(n6.id, n6.position, n3.id, n3.position, 0.10),
+    mkEdge(n6.id, n6.position, n4.id, n4.position, 0.10),
+    mkEdge(n6.id, n6.position, n5.id, n5.position, 0.10),
+  ];
+  return {
+    id: 'buer',
+    name: 'Buer',
+    rank: 'President',
+    domains: ['knowledge', 'transformation'],
+    legions: 50,
+    sealGeometry: { nodes, edges },
+    description:
+      'The tenth spirit of the Ars Goetia, a great president governing ' +
+      '50 legions, who appears when the sun is in Sagittarius. He teaches ' +
+      'philosophy, the moral and natural virtues, the virtues of herbs and ' +
+      'plants, and heals all distempers of mankind. He procures good ' +
+      'familiars.',
+  };
+})();
+
+// ─── Gusion — 11th Spirit ─────────────────────────────────────────────────
+// Duke ruling 40 legions. Appears like a xenopilus.
+// Tells past, present, future; gives honour; reconciles all parties.
+// Geometry: rhombus with crossing diagonals and outer anchors on each axis.
+
+const GUSION: Demon = (() => {
+  const n1 = { id: nid('gusion-n1'), position: { x: 0.50, y: 0.05 } }; // top
+  const n2 = { id: nid('gusion-n2'), position: { x: 0.95, y: 0.50 } }; // right
+  const n3 = { id: nid('gusion-n3'), position: { x: 0.50, y: 0.95 } }; // bottom
+  const n4 = { id: nid('gusion-n4'), position: { x: 0.05, y: 0.50 } }; // left
+  const n5 = { id: nid('gusion-n5'), position: { x: 0.50, y: 0.30 } }; // upper inner
+  const n6 = { id: nid('gusion-n6'), position: { x: 0.70, y: 0.50 } }; // right inner
+  const n7 = { id: nid('gusion-n7'), position: { x: 0.50, y: 0.50 } }; // center
+  const nodes = [n1, n2, n3, n4, n5, n6, n7];
+  const edges: SealEdge[] = [
+    mkEdge(n1.id, n1.position, n2.id, n2.position, 0.15), // rhombus top-right
+    mkEdge(n2.id, n2.position, n3.id, n3.position, 0.15), // rhombus right-bottom
+    mkEdge(n3.id, n3.position, n4.id, n4.position, 0.15), // rhombus bottom-left
+    mkEdge(n4.id, n4.position, n1.id, n1.position, 0.15), // rhombus left-top
+    mkEdge(n1.id, n1.position, n3.id, n3.position, 0.10), // vertical diagonal
+    mkEdge(n5.id, n5.position, n6.id, n6.position, 0.10), // inner chord
+    mkEdge(n7.id, n7.position, n4.id, n4.position, 0.10), // center → left
+    mkEdge(n7.id, n7.position, n2.id, n2.position, 0.10), // center → right
+  ];
+  return {
+    id: 'gusion',
+    name: 'Gusion',
+    rank: 'Duke',
+    domains: ['knowledge', 'revelation'],
+    legions: 40,
+    sealGeometry: { nodes, edges },
+    description:
+      'The eleventh spirit of the Ars Goetia, a great duke commanding ' +
+      '40 legions. He discerns all things past, present, and to come, and ' +
+      'answers all questions truly and fully. He reconciles enemies, gives ' +
+      'honour and dignity to anyone, and confirms same.',
+  };
+})();
+
+// ─── Sitri — 12th Spirit ──────────────────────────────────────────────────
+// Prince ruling 60 legions. Appears with a leopard's head and wings of a gryphon.
+// Causes love and lust; reveals secrets of the opposite sex; compels nakedness.
+// Geometry: interleaved descending triangles with an asymmetric orbit line.
+
+const SITRI: Demon = (() => {
+  const n1 = { id: nid('sitri-n1'), position: { x: 0.50, y: 0.05 } }; // top apex
+  const n2 = { id: nid('sitri-n2'), position: { x: 0.85, y: 0.55 } }; // right outer
+  const n3 = { id: nid('sitri-n3'), position: { x: 0.15, y: 0.55 } }; // left outer
+  const n4 = { id: nid('sitri-n4'), position: { x: 0.65, y: 0.28 } }; // upper-right inner
+  const n5 = { id: nid('sitri-n5'), position: { x: 0.35, y: 0.28 } }; // upper-left inner
+  const n6 = { id: nid('sitri-n6'), position: { x: 0.50, y: 0.75 } }; // lower inner
+  const n7 = { id: nid('sitri-n7'), position: { x: 0.80, y: 0.88 } }; // orbit tail
+  const nodes = [n1, n2, n3, n4, n5, n6, n7];
+  const edges: SealEdge[] = [
+    mkEdge(n1.id, n1.position, n2.id, n2.position, 0.14), // outer triangle right
+    mkEdge(n2.id, n2.position, n3.id, n3.position, 0.14), // outer triangle base
+    mkEdge(n3.id, n3.position, n1.id, n1.position, 0.14), // outer triangle left
+    mkEdge(n4.id, n4.position, n5.id, n5.position, 0.12), // inner bar
+    mkEdge(n5.id, n5.position, n6.id, n6.position, 0.12), // inner left
+    mkEdge(n6.id, n6.position, n4.id, n4.position, 0.12), // inner right
+    mkEdge(n6.id, n6.position, n7.id, n7.position, 0.10), // orbit tail
+    mkEdge(n7.id, n7.position, n2.id, n2.position, 0.12), // orbit to outer
+  ];
+  return {
+    id: 'sitri',
+    name: 'Sitri',
+    rank: 'Prince',
+    domains: ['illusion', 'discord'],
+    legions: 60,
+    sealGeometry: { nodes, edges },
+    description:
+      'The twelfth spirit of the Ars Goetia, a great prince commanding ' +
+      '60 legions. He appears first with the head of a leopard and the wings ' +
+      'of a gryphon, but assumes human form of great beauty when commanded. ' +
+      'He enflames men with love and causes women to show themselves naked; ' +
+      'he reveals all secrets of women.',
+  };
+})();
+
 // ─── Registry ──────────────────────────────────────────────────────────────
+
+/** The id of the starting demon visible to all players by default. */
+export const STARTER_DEMON_ID = 'bael';
 
 export const DEMON_REGISTRY: Record<string, Demon> = {
   bael: BAEL,
@@ -272,6 +522,12 @@ export const DEMON_REGISTRY: Record<string, Demon> = {
   samigina: SAMIGINA,
   marbas: MARBAS,
   valefor: VALEFOR,
+  amon: AMON,
+  barbatos: BARBATOS,
+  paimon: PAIMON,
+  buer: BUER,
+  gusion: GUSION,
+  sitri: SITRI,
 };
 
 /**

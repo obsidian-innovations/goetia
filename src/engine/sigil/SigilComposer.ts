@@ -109,6 +109,7 @@ export class SigilComposer {
       visualState,
       status: 'draft',
       createdAt: Date.now(),
+      statusChangedAt: Date.now(),
     }
   }
 
