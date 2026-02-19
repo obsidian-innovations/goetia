@@ -4,8 +4,15 @@ import { RitualCanvas } from './canvas/RitualCanvas'
 import { UIManager } from './ui'
 import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
+import { useChargingStore } from '@stores/chargingStore'
 import { haptic } from './services/haptics'
 import { audioManager } from './services/audio'
+import { getDemon } from '@engine/demons/DemonRegistry'
+import { generateDemand } from '@engine/demands/DemandEngine'
+import { getNextGesture } from '@engine/charging/AttentionGesture'
+import { SigilLifecycleManager } from '@engine/sigil/SigilLifecycle'
+
+const lifecycleManager = new SigilLifecycleManager()
 
 async function init(): Promise<void> {
   // ── UI overlay first — visible even if PixiJS fails ─────────────────────
@@ -55,10 +62,40 @@ async function init(): Promise<void> {
         audioManager.play('misfire')
         return
       }
-      useGrimoireStore.getState().saveSigil(sigil)
+
+      // Transition to complete and persist
+      const completedSigil = lifecycleManager.transition(sigil, 'complete')
+      useGrimoireStore.getState().saveSigil(completedSigil)
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
+
+      // Start charging if a demon is selected
+      const demonId = useCanvasStore.getState().currentDemonId
+      if (demonId) {
+        try {
+          const demon = getDemon(demonId)
+          useChargingStore.getState().startCharging(completedSigil, demon)
+
+          // Generate initial demand
+          const demand = generateDemand(demon, completedSigil.overallIntegrity)
+          useChargingStore.getState().addDemand(demon.id, demand)
+
+          ui.showCharging(demon.name)
+          return
+        } catch {
+          // Fallback to grimoire view if demon lookup fails
+        }
+      }
+
       ui.showGrimoire()
+    },
+
+    onFulfillDemand(demandId: string) {
+      useChargingStore.getState().fulfillDemand(demandId)
+    },
+
+    onIgnoreDemand(_demandId: string) {
+      // Demand ignored — could trigger escalation in a future update
     },
   })
 
@@ -97,6 +134,50 @@ async function init(): Promise<void> {
       hadRing = false
     }
   })
+
+  // ── Charging tick loop ────────────────────────────────────────────────────
+  // Runs every second to advance charge progress and update the UI
+  const _chargingTick = setInterval(() => {
+    const now = Date.now()
+    useChargingStore.getState().tickAll(now)
+
+    // Update charging UI if visible
+    const charges = useChargingStore.getState().activeCharges
+    const demands = useChargingStore.getState().activeDemands
+    const demonId = useCanvasStore.getState().currentDemonId
+
+    // Update progress for the first active charge tied to the current demon
+    if (demonId) {
+      for (const [, chargeState] of charges) {
+        ui.updateChargingProgress(chargeState.chargeProgress)
+
+        // Update attention gesture hint
+        const gesture = getNextGesture(chargeState, demonId)
+        ui.updateAttentionGesture(gesture)
+
+        // Transition to awakened when fully charged
+        if (chargeState.chargeProgress >= 1) {
+          const pages = useGrimoireStore.getState().pages
+          for (const page of pages) {
+            for (const sigil of page.sigils) {
+              if (sigil.id === chargeState.sigilId && sigil.status === 'complete') {
+                useGrimoireStore.getState().updateSigilStatus(sigil.id, 'resting')
+              }
+            }
+          }
+          useChargingStore.getState().stopCharging(chargeState.sigilId)
+        }
+        break
+      }
+
+      // Update demands UI
+      const demonDemands = demands.get(demonId) ?? []
+      ui.updateDemands(demonDemands)
+    }
+  }, 1000)
+
+  // Store interval ID for cleanup (attach to window for simplicity)
+  ;(window as unknown as Record<string, unknown>)['_chargingTick'] = _chargingTick
 
   // ── Resize handler ────────────────────────────────────────────────────────
   window.addEventListener('resize', () => {

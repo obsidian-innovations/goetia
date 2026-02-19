@@ -188,6 +188,8 @@ export type Sigil = {
   visualState: SigilVisualState;
   status: SigilStatus;
   createdAt: number;
+  /** Timestamp of the last status change; defaults to createdAt for existing sigils */
+  statusChangedAt: number;
 };
 
 export type Demon = {

@@ -3,6 +3,8 @@ import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import type { DrawingPhase } from '@stores/canvasStore'
 import type { Demon, Sigil, SigilVisualState } from '@engine/sigil/Types'
+import type { AttentionGesture } from '@engine/charging/AttentionGesture'
+import type { DemonicDemand } from '@engine/demands/DemandEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -10,6 +12,9 @@ export interface UICallbacks {
   onDemonSelect: (demonId: string) => void
   onPhaseChange: (phase: DrawingPhase) => void
   onBind: () => void
+  onStartCharging?: (sigilId: string) => void
+  onFulfillDemand?: (demandId: string) => void
+  onIgnoreDemand?: (demandId: string) => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -128,6 +133,70 @@ const STYLE = `
   .sigil-entry .s-integrity { font-size: 0.7rem; color: #776688; }
   .sigil-entry .s-status { font-size: 0.65rem; color: #665577; text-transform: uppercase; letter-spacing: 0.08em; }
   #grimoire-empty { text-align: center; color: #443355; font-size: 0.85rem; margin-top: 3rem; }
+
+  /* ── Charging ── */
+  #screen-charging { background: rgba(8,7,15,0.93); pointer-events: all; overflow-y: auto; }
+  #charging-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #charging-header h2 { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #charging-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #charging-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #charging-content { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+  #charging-progress-wrap {
+    display: flex; flex-direction: column; gap: 0.5rem;
+    background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px; padding: 1rem;
+  }
+  #charging-progress-label { font-size: 0.8rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
+  #charging-progress-bar-bg {
+    height: 8px; background: rgba(60,20,90,0.5); border-radius: 4px; overflow: hidden;
+  }
+  #charging-progress-bar {
+    height: 100%; background: linear-gradient(to right, #7722bb, #cc88ff);
+    border-radius: 4px; transition: width 0.5s ease; width: 0%;
+  }
+  #charging-progress-pct { font-size: 1.2rem; color: #cc88ff; text-align: center; font-weight: bold; }
+  #charging-attention-wrap {
+    background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px; padding: 1rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  #charging-attention-label { font-size: 0.8rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
+  #charging-attention-text { font-size: 0.9rem; color: #ddc0ff; }
+  #charging-attention-required {
+    font-size: 0.75rem; color: #ff8833; text-transform: uppercase; letter-spacing: 0.08em; display: none;
+  }
+  #charging-attention-required.visible { display: block; }
+  #charging-demands-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+  #charging-demands-label { font-size: 0.8rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
+  .demand-entry {
+    background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px;
+    padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .demand-entry .demand-text { font-size: 0.85rem; color: #cbb8dd; }
+  .demand-entry .demand-actions { display: flex; gap: 0.5rem; }
+  .demand-fulfill-btn {
+    padding: 0.35rem 0.8rem; border: 1px solid #446622; background: rgba(20,40,10,0.7);
+    color: #88cc44; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .demand-fulfill-btn:hover { border-color: #88cc44; color: #aaffaa; }
+  .demand-ignore-btn {
+    padding: 0.35rem 0.8rem; border: 1px solid #442222; background: rgba(40,10,10,0.7);
+    color: #cc4444; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .demand-ignore-btn:hover { border-color: #cc4444; color: #ff6666; }
+  #charging-charged-notice {
+    background: rgba(80,20,130,0.4); border: 1px solid #aa66ff; border-radius: 8px;
+    padding: 1rem; text-align: center; color: #cc88ff; font-size: 0.9rem;
+    letter-spacing: 0.08em; display: none;
+  }
+  #charging-charged-notice.visible { display: block; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -169,6 +238,67 @@ export class UIManager {
     this._show('grimoire')
   }
 
+  showCharging(demonName: string): void {
+    const label = this._root.querySelector<HTMLElement>('#charging-demon-name')
+    if (label) label.textContent = demonName.toUpperCase()
+    this._show('charging')
+  }
+
+  updateChargingProgress(progress: number): void {
+    const bar = this._root.querySelector<HTMLElement>('#charging-progress-bar')
+    const pct = this._root.querySelector<HTMLElement>('#charging-progress-pct')
+    if (bar) bar.style.width = `${Math.round(progress * 100)}%`
+    if (pct) pct.textContent = `${Math.round(progress * 100)}%`
+
+    const notice = this._root.querySelector<HTMLElement>('#charging-charged-notice')
+    if (notice) notice.classList.toggle('visible', progress >= 1)
+  }
+
+  updateAttentionGesture(gesture: AttentionGesture): void {
+    const text = this._root.querySelector<HTMLElement>('#charging-attention-text')
+    const required = this._root.querySelector<HTMLElement>('#charging-attention-required')
+    if (text) text.textContent = gesture.description
+    if (required) required.classList.toggle('visible', gesture.required)
+  }
+
+  updateDemands(demands: DemonicDemand[]): void {
+    const wrap = this._root.querySelector<HTMLElement>('#charging-demands-wrap')
+    if (!wrap) return
+
+    // Remove old entries (keep the label)
+    const label = wrap.querySelector('#charging-demands-label')
+    wrap.innerHTML = ''
+    if (label) wrap.appendChild(label)
+
+    for (const demand of demands) {
+      if (demand.fulfilled) continue
+      const entry = el('div', 'demand-entry')
+
+      const text = el('div', 'demand-text')
+      text.textContent = demand.description
+      entry.appendChild(text)
+
+      const actions = el('div', 'demand-actions')
+
+      const fulfillBtn = el('button', 'demand-fulfill-btn')
+      fulfillBtn.textContent = 'Done'
+      fulfillBtn.addEventListener('click', () => {
+        this._callbacks?.onFulfillDemand?.(demand.id)
+      })
+
+      const ignoreBtn = el('button', 'demand-ignore-btn')
+      ignoreBtn.textContent = 'Ignore'
+      ignoreBtn.addEventListener('click', () => {
+        this._callbacks?.onIgnoreDemand?.(demand.id)
+      })
+
+      actions.appendChild(fulfillBtn)
+      actions.appendChild(ignoreBtn)
+      entry.appendChild(actions)
+      wrap.appendChild(entry)
+    }
+  }
+
   updatePhaseButtons(phase: DrawingPhase): void {
     this._updatePhaseButtons(phase)
   }
@@ -184,6 +314,7 @@ export class UIManager {
     this._screens.demon = this._buildDemonSelect()
     this._screens.ritual = this._buildRitual()
     this._screens.grimoire = this._buildGrimoire()
+    this._screens.charging = this._buildCharging()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -293,6 +424,67 @@ export class UIManager {
     const content = el('div', '', 'grimoire-content')
     screen.appendChild(content)
 
+    return screen
+  }
+
+  private _buildCharging(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-charging')
+
+    // Header
+    const header = el('div', '', 'charging-header')
+    const backBtn = el('button', '', 'charging-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => this.showGrimoire())
+    const h2 = el('h2')
+    h2.id = 'charging-demon-name'
+    h2.textContent = ''
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'charging-content')
+
+    // Progress section
+    const progressWrap = el('div', '', 'charging-progress-wrap')
+    const progressLabel = el('div', '', 'charging-progress-label')
+    progressLabel.textContent = 'Charge Progress'
+    const barBg = el('div', '', 'charging-progress-bar-bg')
+    const bar = el('div', '', 'charging-progress-bar')
+    barBg.appendChild(bar)
+    const pct = el('div', '', 'charging-progress-pct')
+    pct.textContent = '0%'
+    progressWrap.appendChild(progressLabel)
+    progressWrap.appendChild(barBg)
+    progressWrap.appendChild(pct)
+    content.appendChild(progressWrap)
+
+    // Charged notice
+    const chargedNotice = el('div', '', 'charging-charged-notice')
+    chargedNotice.textContent = 'The sigil is charged. Maintain the hold window.'
+    content.appendChild(chargedNotice)
+
+    // Attention gesture section
+    const attentionWrap = el('div', '', 'charging-attention-wrap')
+    const attentionLabel = el('div', '', 'charging-attention-label')
+    attentionLabel.textContent = 'Attention Gesture'
+    const attentionText = el('div', '', 'charging-attention-text')
+    attentionText.textContent = 'Waiting…'
+    const attentionRequired = el('div', '', 'charging-attention-required')
+    attentionRequired.textContent = '⚠ Attention required now'
+    attentionWrap.appendChild(attentionLabel)
+    attentionWrap.appendChild(attentionText)
+    attentionWrap.appendChild(attentionRequired)
+    content.appendChild(attentionWrap)
+
+    // Demands section
+    const demandsWrap = el('div', '', 'charging-demands-wrap')
+    const demandsLabel = el('div', '', 'charging-demands-label')
+    demandsLabel.id = 'charging-demands-label'
+    demandsLabel.textContent = 'Demonic Demands'
+    demandsWrap.appendChild(demandsLabel)
+    content.appendChild(demandsWrap)
+
+    screen.appendChild(content)
     return screen
   }
 

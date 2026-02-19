@@ -99,6 +99,7 @@ export class GrimoireDB {
           )
         }
         sigil.status = newStatus
+        sigil.statusChangedAt = Date.now()
         this.persist()
         return
       }
