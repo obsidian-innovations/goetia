@@ -12,6 +12,14 @@ const NODE_DONE    = 0xaa66ff
 const NODE_UNKNOWN = 0x332244  // undiscovered node placeholder
 const EDGE_UNKNOWN = 0x3a1a55  // undiscovered edge hint
 
+/**
+ * Vertical insets (px) that keep the seal clear of the UI chrome.
+ * SEAL_PAD_TOP reserves space for the ritual header bar.
+ * SEAL_PAD_BOT reserves space for the phase/bind toolbar at the bottom.
+ */
+const SEAL_PAD_TOP = 56
+const SEAL_PAD_BOT = 72
+
 // ─── SealLayer ─────────────────────────────────────────────────────────────
 
 /**
@@ -78,6 +86,28 @@ export class SealLayer extends Container {
     this._render()
   }
 
+  // ─── Coordinate helpers ───────────────────────────────────────────────────
+
+  /** Map a normalised [0,1] point to padded pixel space. */
+  private _toPixel(p: Point): Point {
+    return {
+      x: p.x * this._w,
+      y: SEAL_PAD_TOP + p.y * (this._h - SEAL_PAD_TOP - SEAL_PAD_BOT),
+    }
+  }
+
+  /**
+   * Inverse of `_toPixel`: convert a raw pixel-space point to the seal's
+   * normalised coordinate space. Used by RitualCanvas so that active-stroke
+   * points fed back into this layer render exactly where the finger was.
+   */
+  normalisePt(pt: Point): Point {
+    return {
+      x: pt.x / this._w,
+      y: (pt.y - SEAL_PAD_TOP) / (this._h - SEAL_PAD_TOP - SEAL_PAD_BOT),
+    }
+  }
+
   // ─── Hit-testing ──────────────────────────────────────────────────────────
 
   /**
@@ -96,8 +126,9 @@ export class SealLayer extends Container {
     let nearest: NodeId | null = null
     let minDist = threshold
     for (const node of knownNodes) {
-      const dx = point.x - node.position.x * this._w
-      const dy = point.y - node.position.y * this._h
+      const px = this._toPixel(node.position)
+      const dx = point.x - px.x
+      const dy = point.y - px.y
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < minDist) {
         minDist = dist
@@ -144,8 +175,10 @@ export class SealLayer extends Container {
         if (connSet.has(`${edge.fromNode}:${edge.toNode}`)) continue
         const path = edge.canonicalPath
         if (path.length < 2) continue
-        g.moveTo(path[0].x * this._w, path[0].y * this._h)
-        g.lineTo(path[path.length - 1].x * this._w, path[path.length - 1].y * this._h)
+        const p0 = this._toPixel(path[0])
+        const p1 = this._toPixel(path[path.length - 1])
+        g.moveTo(p0.x, p0.y)
+        g.lineTo(p1.x, p1.y)
         g.stroke({ color: EDGE_UNKNOWN, width: 1, alpha: 0.22 })
       }
     }
@@ -156,9 +189,11 @@ export class SealLayer extends Container {
       if (knownEdgeSet !== null && !knownEdgeSet.has(`${edge.fromNode}:${edge.toNode}`)) continue
       const path = edge.canonicalPath
       if (path.length < 2) continue
-      g.moveTo(path[0].x * this._w, path[0].y * this._h)
+      const first = this._toPixel(path[0])
+      g.moveTo(first.x, first.y)
       for (let i = 1; i < path.length; i++) {
-        g.lineTo(path[i].x * this._w, path[i].y * this._h)
+        const p = this._toPixel(path[i])
+        g.lineTo(p.x, p.y)
       }
       g.stroke({ color: 0x6633aa, width: 1.5, alpha: 0.6 })
     }
@@ -174,17 +209,18 @@ export class SealLayer extends Container {
         conn.accuracy >= 0.50 ? COLOR_MEDIUM :
         COLOR_DIM
       const path = edge.canonicalPath
-      g.moveTo(path[0].x * this._w, path[0].y * this._h)
+      const first = this._toPixel(path[0])
+      g.moveTo(first.x, first.y)
       for (let i = 1; i < path.length; i++) {
-        g.lineTo(path[i].x * this._w, path[i].y * this._h)
+        const p = this._toPixel(path[i])
+        g.lineTo(p.x, p.y)
       }
       g.stroke({ color, width: 2 })
     }
 
     // 4. Nodes
     for (const node of nodes) {
-      const px = node.position.x * this._w
-      const py = node.position.y * this._h
+      const { x: px, y: py } = this._toPixel(node.position)
       const done = this._connections.some(
         c => c.fromNode === node.id || c.toNode === node.id,
       )
@@ -208,9 +244,11 @@ export class SealLayer extends Container {
 
     // 5. Active stroke
     if (this._activeStroke.length > 1) {
-      g.moveTo(this._activeStroke[0].x * this._w, this._activeStroke[0].y * this._h)
+      const first = this._toPixel(this._activeStroke[0])
+      g.moveTo(first.x, first.y)
       for (let i = 1; i < this._activeStroke.length; i++) {
-        g.lineTo(this._activeStroke[i].x * this._w, this._activeStroke[i].y * this._h)
+        const p = this._toPixel(this._activeStroke[i])
+        g.lineTo(p.x, p.y)
       }
       g.stroke({ color: 0xffee88, width: 2, alpha: 0.85 })
     }

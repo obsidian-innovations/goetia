@@ -206,11 +206,12 @@ export class RitualCanvas {
     this._evaluator.addPoint(this._toInputEvent(pt, e))
     this._activePixelPts.push(pt)
 
-    const normPts = this._activePixelPts.map(p => this._normPt(p))
-
     if (phase === 'SEAL') {
-      this._sealLayer.setActiveStroke(normPts)
+      // Use seal-padded normalisation so the stroke aligns with node positions
+      const sealNormPts = this._activePixelPts.map(p => this._sealLayer.normalisePt(p))
+      this._sealLayer.setActiveStroke(sealNormPts)
     } else if (phase === 'GLYPH') {
+      const normPts = this._activePixelPts.map(p => this._normPt(p))
       this._glyphLayer.setActiveStroke(normPts)
     }
     // RING: no in-progress visual; ring renders on completion
