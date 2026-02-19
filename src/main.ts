@@ -24,6 +24,7 @@ async function init(): Promise<void> {
     background: 0x08070f,
     resizeTo: window,
     resolution: window.devicePixelRatio || 1,
+    autoDensity: true,
     antialias: true,
     hello: !import.meta.env.PROD,
   })
