@@ -7,6 +7,8 @@ import type { Demon, Sigil, SigilVisualState } from '@engine/sigil/Types'
 import type { AttentionGesture } from '@engine/charging/AttentionGesture'
 import type { DemonicDemand } from '@engine/demands/DemandEngine'
 import type { ResearchState } from '@engine/research/ResearchEngine'
+import type { ThinPlace } from '@engine/world/ThinPlaces'
+import { bearingDeg, compassLabel } from '@engine/world/ThinPlaces'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -18,6 +20,7 @@ export interface UICallbacks {
   onFulfillDemand?: (demandId: string) => void
   onIgnoreDemand?: (demandId: string) => void
   onStudySigil?: (sigilId: string, demonId: string) => void
+  onRequestLocation?: () => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -254,6 +257,71 @@ const STYLE = `
     background: rgba(20,5,35,0.8); border: 1px solid #2a0a40; border-radius: 8px;
     padding: 0.75rem; font-size: 0.82rem; color: #9977aa; font-style: italic; line-height: 1.5;
   }
+
+  /* ── World Map ── */
+  #screen-world { background: rgba(8,7,15,0.95); pointer-events: all; }
+  #world-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #world-header h2 { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #world-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #world-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #world-content { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0.75rem; gap: 0.75rem; overflow-y: auto; }
+  #world-radar { width: 280px; height: 280px; border-radius: 50%; background: rgba(10,5,20,0.8); border: 1px solid #331144; }
+  #world-loc-btn {
+    padding: 0.5rem 1.5rem; border: 1px solid #664488; background: rgba(50,10,80,0.7);
+    color: #cc88ff; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em;
+    transition: all 0.2s;
+  }
+  #world-loc-btn:hover { border-color: #aa44dd; background: rgba(80,20,120,0.7); }
+  #world-loc-status { font-size: 0.75rem; color: #554466; text-align: center; }
+  #world-current-place {
+    background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px;
+    padding: 0.75rem; width: 100%; display: none;
+  }
+  #world-current-place.visible { display: block; }
+  #world-current-place .wcp-name { font-size: 0.9rem; color: #cc88ff; margin-bottom: 0.25rem; }
+  #world-current-place .wcp-veil { font-size: 0.75rem; color: #997799; }
+  #world-current-place .wcp-boost {
+    font-size: 0.8rem; color: #88cc44; margin-top: 0.25rem; letter-spacing: 0.06em;
+  }
+  #world-nearby-list { width: 100%; display: flex; flex-direction: column; gap: 0.4rem; }
+  .world-place-entry {
+    background: rgba(20,8,35,0.6); border: 1px solid #2a0a40; border-radius: 6px;
+    padding: 0.5rem 0.75rem; display: flex; align-items: center; gap: 0.75rem;
+  }
+  .world-place-entry .wpe-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: #aa55ff; box-shadow: 0 0 6px #aa55ff;
+  }
+  .world-place-entry.player-created .wpe-dot { background: #ffaa33; box-shadow: 0 0 6px #ffaa33; }
+  .world-place-entry.current .wpe-dot { background: #55ffaa; box-shadow: 0 0 8px #55ffaa; }
+  .world-place-entry .wpe-meta { flex: 1; }
+  .world-place-entry .wpe-name { font-size: 0.8rem; color: #cbb8dd; }
+  .world-place-entry .wpe-info { font-size: 0.68rem; color: #665577; }
+  #world-no-location { text-align: center; color: #443355; font-size: 0.85rem; margin-top: 1rem; }
+  #map-btn {
+    margin: 0 0.75rem 0 0; padding: 0.5rem 1.2rem;
+    background: transparent; border: 1px solid #331144;
+    color: #776688; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #map-btn:hover { border-color: #7733aa; color: #cc88ff; }
+  #charging-place-wrap {
+    background: rgba(30,10,50,0.6); border: 1px solid #331144; border-radius: 8px;
+    padding: 0.75rem; display: none; flex-direction: column; gap: 0.3rem;
+  }
+  #charging-place-wrap.visible { display: flex; }
+  #charging-place-label { font-size: 0.8rem; color: #997799; text-transform: uppercase; letter-spacing: 0.1em; }
+  #charging-place-name { font-size: 0.85rem; color: #cc88ff; }
+  #charging-place-boost { font-size: 0.75rem; color: #88cc44; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -264,6 +332,12 @@ export class UIManager {
   private _callbacks: UICallbacks | null = null
   private _unsubscribeStore: (() => void) | null = null
   private _studyCooldowns: Map<string, number> = new Map()
+  // World map radar
+  private _radarCanvas: HTMLCanvasElement | null = null
+  private _radarAnimFrame = 0
+  private _worldNearbyPlaces: ThinPlace[] = []
+  private _worldCurrentPlace: ThinPlace | null = null
+  private _worldPlayerPos: { lat: number; lng: number } | null = null
 
   constructor() {
     this._injectStyles()
@@ -366,6 +440,84 @@ export class UIManager {
     this._show('study')
   }
 
+  showWorld(): void {
+    this._show('world')
+    this._startRadar()
+  }
+
+  /**
+   * Update the world map screen with the latest world state.
+   * `nearbyPlaces` are sorted nearest-first.
+   */
+  updateWorldState(
+    nearbyPlaces: ThinPlace[],
+    currentPlace: ThinPlace | null,
+    playerPos: { lat: number; lng: number } | null,
+    locationPermission: PermissionState,
+  ): void {
+    this._worldNearbyPlaces = nearbyPlaces
+    this._worldCurrentPlace = currentPlace
+    this._worldPlayerPos = playerPos
+
+    // Update location status text
+    const statusEl = this._root.querySelector<HTMLElement>('#world-loc-status')
+    const locBtn = this._root.querySelector<HTMLElement>('#world-loc-btn')
+    if (statusEl) {
+      if (locationPermission === 'denied') {
+        statusEl.textContent = 'Location access denied. Enable in browser settings.'
+      } else if (playerPos) {
+        statusEl.textContent = `${nearbyPlaces.length} thin place${nearbyPlaces.length !== 1 ? 's' : ''} nearby`
+      } else {
+        statusEl.textContent = 'Locating…'
+      }
+    }
+    if (locBtn) {
+      locBtn.style.display = locationPermission === 'denied' ? 'none' : 'block'
+    }
+
+    // Update current place card
+    const cpWrap = this._root.querySelector<HTMLElement>('#world-current-place')
+    if (cpWrap) {
+      cpWrap.classList.toggle('visible', currentPlace !== null)
+      if (currentPlace) {
+        const nameEl = cpWrap.querySelector<HTMLElement>('.wcp-name')
+        const veilEl = cpWrap.querySelector<HTMLElement>('.wcp-veil')
+        const boostEl = cpWrap.querySelector<HTMLElement>('.wcp-boost')
+        if (nameEl) nameEl.textContent = _thinPlaceLabel(currentPlace)
+        if (veilEl) veilEl.textContent = `Veil strength: ${Math.round(currentPlace.veilStrength * 100)}%`
+        if (boostEl) {
+          const mult = (1.5 + (1 - currentPlace.veilStrength) * 1.5).toFixed(1)
+          boostEl.textContent = `Charge rate: ×${mult}`
+        }
+      }
+    }
+
+    // Rebuild nearby list
+    const listEl = this._root.querySelector<HTMLElement>('#world-nearby-list')
+    if (listEl) {
+      listEl.innerHTML = ''
+      for (const tp of nearbyPlaces) {
+        listEl.appendChild(this._worldPlaceEntry(tp, currentPlace, playerPos))
+      }
+    }
+
+    // Show/hide "no location" message
+    const noLocEl = this._root.querySelector<HTMLElement>('#world-no-location')
+    if (noLocEl) noLocEl.style.display = playerPos ? 'none' : 'block'
+  }
+
+  /** Update the thin place indicator on the charging screen. */
+  updateChargingThinPlace(currentPlace: ThinPlace | null, chargeMultiplier: number): void {
+    const wrap = this._root.querySelector<HTMLElement>('#charging-place-wrap')
+    const namEl = this._root.querySelector<HTMLElement>('#charging-place-name')
+    const boostEl = this._root.querySelector<HTMLElement>('#charging-place-boost')
+    if (wrap) wrap.classList.toggle('visible', currentPlace !== null)
+    if (currentPlace) {
+      if (namEl) namEl.textContent = _thinPlaceLabel(currentPlace)
+      if (boostEl) boostEl.textContent = `Charge rate: ×${chargeMultiplier.toFixed(1)}`
+    }
+  }
+
   updateChargingProgress(progress: number): void {
     const bar = this._root.querySelector<HTMLElement>('#charging-progress-bar')
     const pct = this._root.querySelector<HTMLElement>('#charging-progress-pct')
@@ -426,6 +578,7 @@ export class UIManager {
   }
 
   destroy(): void {
+    this._stopRadar()
     this._unsubscribeStore?.()
     this._root.remove()
   }
@@ -438,6 +591,7 @@ export class UIManager {
     this._screens.grimoire = this._buildGrimoire()
     this._screens.charging = this._buildCharging()
     this._screens.study = this._buildStudy()
+    this._screens.world = this._buildWorld()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -453,10 +607,21 @@ export class UIManager {
     const grid = el('div', '', 'demon-grid')
     screen.appendChild(grid)
 
+    const btnRow = el('div')
+    btnRow.style.cssText = 'display:flex;justify-content:center;gap:0.5rem;margin:0.75rem 0'
+
     const recordsBtn = el('button', '', 'records-btn')
+    recordsBtn.style.margin = '0'
     recordsBtn.textContent = 'Records'
     recordsBtn.addEventListener('click', () => this.showGrimoire())
-    screen.appendChild(recordsBtn)
+    btnRow.appendChild(recordsBtn)
+
+    const mapBtn = el('button', '', 'map-btn')
+    mapBtn.textContent = 'Map'
+    mapBtn.addEventListener('click', () => this.showWorld())
+    btnRow.appendChild(mapBtn)
+
+    screen.appendChild(btnRow)
 
     return screen
   }
@@ -603,6 +768,17 @@ export class UIManager {
 
     const content = el('div', '', 'charging-content')
 
+    // Thin place indicator
+    const placeWrap = el('div', '', 'charging-place-wrap')
+    const placeLabel = el('div', '', 'charging-place-label')
+    placeLabel.textContent = 'Thin Place'
+    const placeName = el('div', '', 'charging-place-name')
+    const placeBoost = el('div', '', 'charging-place-boost')
+    placeWrap.appendChild(placeLabel)
+    placeWrap.appendChild(placeName)
+    placeWrap.appendChild(placeBoost)
+    content.appendChild(placeWrap)
+
     // Progress section
     const progressWrap = el('div', '', 'charging-progress-wrap')
     const progressLabel = el('div', '', 'charging-progress-label')
@@ -664,6 +840,209 @@ export class UIManager {
     screen.appendChild(content)
 
     return screen
+  }
+
+  private _buildWorld(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-world')
+
+    const header = el('div', '', 'world-header')
+    const backBtn = el('button', '', 'world-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => {
+      this._stopRadar()
+      this.showDemonSelect()
+    })
+    const h2 = el('h2')
+    h2.textContent = 'Thin Places'
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'world-content')
+
+    // Radar canvas
+    const radar = document.createElement('canvas')
+    radar.id = 'world-radar'
+    radar.width = 280
+    radar.height = 280
+    this._radarCanvas = radar
+    content.appendChild(radar)
+
+    // Location button
+    const locBtn = el('button', '', 'world-loc-btn')
+    locBtn.textContent = 'Enable Location'
+    locBtn.addEventListener('click', () => this._callbacks?.onRequestLocation?.())
+    content.appendChild(locBtn)
+
+    // Location status
+    const status = el('div', '', 'world-loc-status')
+    status.textContent = 'Location not enabled'
+    content.appendChild(status)
+
+    // Current place card
+    const currentPlace = el('div', '', 'world-current-place')
+    currentPlace.innerHTML = `
+      <div class="wcp-name"></div>
+      <div class="wcp-veil"></div>
+      <div class="wcp-boost"></div>
+    `
+    content.appendChild(currentPlace)
+
+    // Nearby list
+    const nearbyList = el('div', '', 'world-nearby-list')
+    content.appendChild(nearbyList)
+
+    // No location message
+    const noLoc = el('p', '', 'world-no-location')
+    noLoc.textContent = 'Enable location to discover Thin Places near you.'
+    content.appendChild(noLoc)
+
+    screen.appendChild(content)
+    return screen
+  }
+
+  private _worldPlaceEntry(
+    tp: ThinPlace,
+    currentPlace: ThinPlace | null,
+    playerPos: { lat: number; lng: number } | null,
+  ): HTMLDivElement {
+    const isCurrent = currentPlace?.id === tp.id
+    const cls = `world-place-entry${tp.type === 'player_created' ? ' player-created' : ''}${isCurrent ? ' current' : ''}`
+    const entry = el('div', cls)
+
+    const dot = el('div', 'wpe-dot')
+    const meta = el('div', 'wpe-meta')
+
+    const nameEl = el('div', 'wpe-name')
+    nameEl.textContent = _thinPlaceLabel(tp)
+
+    const infoEl = el('div', 'wpe-info')
+    if (playerPos) {
+      const dist = _formatDistance(playerPos, tp.center)
+      const bearing = bearingDeg(playerPos, tp.center)
+      const dir = compassLabel(bearing)
+      infoEl.textContent = `${dist} ${dir} · Veil ${Math.round(tp.veilStrength * 100)}%`
+    } else {
+      infoEl.textContent = `Radius ${tp.radiusMeters}m · Veil ${Math.round(tp.veilStrength * 100)}%`
+    }
+
+    meta.appendChild(nameEl)
+    meta.appendChild(infoEl)
+    entry.appendChild(dot)
+    entry.appendChild(meta)
+    return entry
+  }
+
+  private _startRadar(): void {
+    this._stopRadar()
+    const loop = () => {
+      this._drawRadar()
+      this._radarAnimFrame = requestAnimationFrame(loop)
+    }
+    this._radarAnimFrame = requestAnimationFrame(loop)
+  }
+
+  private _stopRadar(): void {
+    if (this._radarAnimFrame) {
+      cancelAnimationFrame(this._radarAnimFrame)
+      this._radarAnimFrame = 0
+    }
+  }
+
+  private _drawRadar(): void {
+    const canvas = this._radarCanvas
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const w = canvas.width
+    const h = canvas.height
+    const cx = w / 2
+    const cy = h / 2
+    const r = Math.min(cx, cy) - 10
+    const t = performance.now() / 1000
+
+    ctx.clearRect(0, 0, w, h)
+
+    // Background
+    ctx.fillStyle = 'rgba(8, 5, 18, 0.95)'
+    ctx.beginPath()
+    ctx.arc(cx, cy, r + 10, 0, Math.PI * 2)
+    ctx.fill()
+
+    // Concentric rings
+    for (let ring = 1; ring <= 4; ring++) {
+      const rr = (ring / 4) * r
+      ctx.beginPath()
+      ctx.arc(cx, cy, rr, 0, Math.PI * 2)
+      ctx.strokeStyle = 'rgba(80, 30, 120, 0.3)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+    }
+
+    // Cross-hairs
+    ctx.strokeStyle = 'rgba(80, 30, 120, 0.2)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy)
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r)
+    ctx.stroke()
+
+    // Sweeping radar arm
+    const sweepAngle = (t * 0.8) % (Math.PI * 2)
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.arc(cx, cy, r, sweepAngle - Math.PI / 3, sweepAngle)
+    ctx.fillStyle = 'rgba(140, 60, 220, 0.08)'
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.lineTo(cx + Math.cos(sweepAngle) * r, cy + Math.sin(sweepAngle) * r)
+    ctx.strokeStyle = 'rgba(170, 80, 255, 0.6)'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+
+    // Player dot at center
+    ctx.beginPath()
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2)
+    ctx.fillStyle = '#ffffff'
+    ctx.fill()
+
+    // Nearby thin place dots
+    if (this._worldPlayerPos) {
+      const RADAR_RANGE_M = 5_000
+      for (const tp of this._worldNearbyPlaces) {
+        const bearing = bearingDeg(this._worldPlayerPos, tp.center) * (Math.PI / 180)
+        // haversine approximation for radar position
+        const dlat = (tp.center.lat - this._worldPlayerPos.lat) * 111_000
+        const dlng = (tp.center.lng - this._worldPlayerPos.lng) * 111_000 * Math.cos(this._worldPlayerPos.lat * Math.PI / 180)
+        const dist = Math.sqrt(dlat * dlat + dlng * dlng)
+        const frac = Math.min(1, dist / RADAR_RANGE_M)
+
+        const px = cx + Math.sin(bearing) * frac * r
+        const py = cy - Math.cos(bearing) * frac * r
+
+        const isCurrent = this._worldCurrentPlace?.id === tp.id
+        const pulse = 0.6 + 0.4 * Math.sin(t * 2 + tp.id.length)
+        const dotR = isCurrent ? 7 : 4 + (1 - tp.veilStrength) * 3
+
+        ctx.beginPath()
+        ctx.arc(px, py, dotR * pulse, 0, Math.PI * 2)
+        ctx.fillStyle = isCurrent
+          ? `rgba(85, 255, 170, ${0.7 * pulse})`
+          : tp.type === 'player_created'
+            ? `rgba(255, 170, 51, ${0.7 * pulse})`
+            : `rgba(170, 85, 255, ${0.7 * pulse})`
+        ctx.fill()
+      }
+    } else {
+      // No location — draw placeholder text
+      ctx.fillStyle = 'rgba(80, 50, 100, 0.5)'
+      ctx.font = '12px Georgia, serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('Awaiting location…', cx, cy + 20)
+    }
   }
 
   // ─── Render helpers ───────────────────────────────────────────────────────
@@ -770,6 +1149,7 @@ export class UIManager {
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   private _show(name: keyof typeof this._screens): void {
+    if (name !== 'world') this._stopRadar()
     for (const [key, screen] of Object.entries(this._screens)) {
       screen.classList.toggle('active', key === name)
     }
@@ -791,4 +1171,18 @@ function el(tag: string, className = '', id = ''): HTMLDivElement {
   if (className) e.className = className
   if (id) e.id = id
   return e
+}
+
+// ─── World map helpers ────────────────────────────────────────────────────────
+
+function _thinPlaceLabel(tp: ThinPlace): string {
+  const typeTag = tp.type === 'player_created' ? ' ✦' : tp.type === 'dynamic' ? ' ◉' : ''
+  return (tp.id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) + typeTag
+}
+
+function _formatDistance(from: { lat: number; lng: number }, to: { lat: number; lng: number }): string {
+  const dlat = (to.lat - from.lat) * 111_000
+  const dlng = (to.lng - from.lng) * 111_000 * Math.cos(from.lat * Math.PI / 180)
+  const m = Math.round(Math.sqrt(dlat * dlat + dlng * dlng))
+  return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`
 }

@@ -58,14 +58,15 @@ export function createChargingState(sigilId: string, demonRank: DemonRank): Char
 /**
  * Advances the charging state by the elapsed time since the last tick.
  * Applies decay if the player hasn't given attention within DECAY_IDLE_THRESHOLD_MS.
+ * `chargeMultiplier` (default 1.0) scales effective elapsed time — use >1 inside Thin Places.
  */
-export function tick(state: ChargingState, now: number): ChargingState {
+export function tick(state: ChargingState, now: number, chargeMultiplier = 1.0): ChargingState {
   const required = getRequiredChargeTime(state.demonRank)
   const elapsed = Math.max(0, now - state.startedAt)
   const idleMs = now - state.lastAttentionAt
 
-  // Natural progress based on total elapsed time
-  const naturalProgress = Math.min(1, elapsed / required)
+  // Natural progress based on effective elapsed time (multiplied by thin place boost)
+  const naturalProgress = Math.min(1, (elapsed * Math.max(1, chargeMultiplier)) / required)
 
   // Decay if idle for more than the threshold
   let decayLoss = 0

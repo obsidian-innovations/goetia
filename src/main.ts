@@ -13,6 +13,9 @@ import { getNextGesture } from '@engine/charging/AttentionGesture'
 import { SigilLifecycleManager } from '@engine/sigil/SigilLifecycle'
 import { useResearchStore } from '@stores/researchStore'
 import { completedRitual, studiedSigil } from '@engine/research/ResearchActivities'
+import { useWorldStore } from '@stores/worldStore'
+import { getCurrentPosition, watchPosition, queryPermission } from './services/geolocation'
+import { calculateInterference } from '@engine/world/Encounters'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -76,12 +79,18 @@ async function init(): Promise<void> {
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
 
-      // Award research XP for completing the ritual
+      // Award research XP and record world ritual activity
       const demonId = useCanvasStore.getState().currentDemonId
       if (demonId) {
         const xp = completedRitual(completedSigil.overallIntegrity)
         useResearchStore.getState().addProgress(demonId, xp)
         ui.refreshDemonGrid()
+
+        // Record ritual in the world engine (for thin place spawning)
+        const playerPos = useWorldStore.getState().playerPosition
+        if (playerPos) {
+          useWorldStore.getState().recordRitual(playerPos, completedSigil.overallIntegrity, demonId)
+        }
       }
 
       // Start charging if a demon is selected
@@ -121,6 +130,48 @@ async function init(): Promise<void> {
         ui.refreshDemonGrid()
       }
     },
+
+    onRequestLocation() {
+      // Prompt for location and begin watching
+      getCurrentPosition().then(pos => {
+        if (pos) {
+          useWorldStore.getState().setLocationPermission('granted')
+          useWorldStore.getState().updatePosition(pos)
+        }
+      })
+    },
+  })
+
+  // ── Geolocation setup ─────────────────────────────────────────────────────
+  // Non-blocking: check permission and start watching if already granted.
+  queryPermission().then(async (permission) => {
+    useWorldStore.getState().setLocationPermission(permission)
+    if (permission === 'granted') {
+      const pos = await getCurrentPosition()
+      if (pos) {
+        useWorldStore.getState().updatePosition(pos)
+      }
+      watchPosition((pos) => {
+        useWorldStore.getState().updatePosition(pos)
+        useWorldStore.getState().setLocationPermission('granted')
+      })
+    }
+  })
+
+  // ── World store subscription ───────────────────────────────────────────────
+  useWorldStore.subscribe((worldState) => {
+    const { nearbyThinPlaces, currentThinPlace, playerPosition, locationPermission } = worldState
+    ui.updateWorldState(nearbyThinPlaces, currentThinPlace, playerPosition, locationPermission)
+
+    // Update distortion for active encounters
+    const { activeEncounters } = worldState
+    const activeEnc = activeEncounters.find(e => !e.bound)
+    if (activeEnc) {
+      const fx = calculateInterference(activeEnc)
+      ritualCanvas.setDistortionIntensity(fx.sealAlphaReduction)
+    } else {
+      ritualCanvas.setDistortionIntensity(0)
+    }
   })
 
   // ── Store-driven feedback ─────────────────────────────────────────────────
@@ -163,12 +214,19 @@ async function init(): Promise<void> {
   // Runs every second to advance charge progress and update the UI
   const _chargingTick = setInterval(() => {
     const now = Date.now()
-    useChargingStore.getState().tickAll(now)
+    const chargeMultiplier = useWorldStore.getState().getChargeMultiplier()
+    useChargingStore.getState().tickAll(now, chargeMultiplier)
+    // Tick world decay as well
+    useWorldStore.getState().tick(now)
 
     // Update charging UI if visible
     const charges = useChargingStore.getState().activeCharges
     const demands = useChargingStore.getState().activeDemands
     const demonId = useCanvasStore.getState().currentDemonId
+
+    // Update thin place indicator on charging screen
+    const { currentThinPlace } = useWorldStore.getState()
+    ui.updateChargingThinPlace(currentThinPlace, chargeMultiplier)
 
     // Update progress for the first active charge tied to the current demon
     if (demonId) {

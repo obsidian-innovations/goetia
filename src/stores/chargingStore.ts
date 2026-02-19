@@ -21,7 +21,7 @@ interface ChargingStoreActions {
   /** Begin charging a sigil */
   startCharging: (sigil: Sigil, demon: Demon) => void
   /** Advance all active charges to the given timestamp */
-  tickAll: (now: number) => void
+  tickAll: (now: number, chargeMultiplier?: number) => void
   /** Record an attention gesture for a sigil */
   registerAttention: (sigilId: string, now: number) => void
   /** Mark a demand as fulfilled */
@@ -56,11 +56,11 @@ export const useChargingStore = createStore<ChargingStore>((set, get) => ({
     })
   },
 
-  tickAll(now: number) {
+  tickAll(now: number, chargeMultiplier = 1.0) {
     set(state => {
       const charges = new Map(state.activeCharges)
       for (const [id, chargeState] of charges) {
-        charges.set(id, tick(chargeState, now))
+        charges.set(id, tick(chargeState, now, chargeMultiplier))
       }
       return { activeCharges: charges }
     })
