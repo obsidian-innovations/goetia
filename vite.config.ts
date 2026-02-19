@@ -15,6 +15,12 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // New service worker takes over immediately without waiting for all
+        // tabs to close, so users always run the latest JS after a deploy.
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       manifest: {
         name: 'Grimoire',
         short_name: 'Grimoire',
