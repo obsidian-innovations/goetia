@@ -1,4 +1,5 @@
 import { listDemons, STARTER_DEMON_ID } from '@engine/demons/DemonRegistry'
+import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
 import { useCanvasStore } from '@stores/canvasStore'
@@ -130,6 +131,33 @@ const STYLE = `
   }
   #bind-btn.visible { display: block; }
   #bind-btn:hover { border-color: #ffaa44; color: #ffcc88; background: rgba(80,40,0,0.7); }
+
+  /* ── Glyph Reference Panel ── */
+  #glyph-ref-panel {
+    display: none; flex-direction: column; gap: 0.5rem;
+    padding: 0.6rem 0.75rem 0.5rem;
+    background: linear-gradient(to top, rgba(8,7,15,0.9) 0%, rgba(8,7,15,0.5) 100%);
+    pointer-events: all; overflow-x: hidden;
+  }
+  #glyph-ref-panel.visible { display: flex; }
+  .glyph-ref-group { display: flex; flex-direction: column; gap: 0.3rem; }
+  .glyph-ref-group-label {
+    font-size: 0.55rem; letter-spacing: 0.15em; text-transform: uppercase;
+    color: #664488; padding-left: 0.2rem;
+  }
+  .glyph-ref-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .glyph-card {
+    display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+    background: rgba(30,10,50,0.6); border: 1px solid #331144;
+    border-radius: 5px; padding: 0.3rem 0.4rem; cursor: default;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .glyph-card:hover { border-color: #7733aa; background: rgba(60,20,100,0.7); }
+  .glyph-card svg { display: block; }
+  .glyph-card-name {
+    font-size: 0.5rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #887799; white-space: nowrap;
+  }
 
   /* ── Grimoire ── */
   #screen-grimoire { background: rgba(8,7,15,0.95); pointer-events: all; }
@@ -1071,6 +1099,9 @@ export class UIManager {
     spacer.style.flex = '1'
     screen.appendChild(spacer)
 
+    // Glyph reference panel (visible only in GLYPH phase)
+    screen.appendChild(this._buildGlyphReference())
+
     // Toolbar
     const toolbar = el('div', '', 'ritual-toolbar')
 
@@ -1092,6 +1123,80 @@ export class UIManager {
 
     screen.appendChild(toolbar)
     return screen
+  }
+
+  private _buildGlyphReference(): HTMLDivElement {
+    const SVG_SIZE = 52
+    const PAD = 4
+
+    const groups: { label: string; prefix: string }[] = [
+      { label: 'Vector', prefix: 'VECTOR_' },
+      { label: 'Quality', prefix: 'QUALITY_' },
+      { label: 'Target', prefix: 'TARGET_' },
+      { label: 'Duration', prefix: 'DURATION_' },
+    ]
+
+    const panel = el('div', '', 'glyph-ref-panel')
+
+    for (const { label, prefix } of groups) {
+      const templates = GLYPH_TEMPLATES.filter(t => t.id.startsWith(prefix))
+      if (templates.length === 0) continue
+
+      const group = el('div', 'glyph-ref-group')
+      const groupLabel = el('div', 'glyph-ref-group-label')
+      groupLabel.textContent = label
+      group.appendChild(groupLabel)
+
+      const row = el('div', 'glyph-ref-row')
+      for (const tpl of templates) {
+        const card = el('div', 'glyph-card')
+        card.title = tpl.intent
+
+        // Build SVG path string from canonical points (0-1 → SVG coords)
+        const pts = tpl.canonicalPath
+        const scale = SVG_SIZE - PAD * 2
+        const d = pts.map((p, i) => {
+          const x = (p.x * scale + PAD).toFixed(1)
+          const y = (p.y * scale + PAD).toFixed(1)
+          return `${i === 0 ? 'M' : 'L'}${x},${y}`
+        }).join(' ')
+
+        const svgNS = 'http://www.w3.org/2000/svg'
+        const svg = document.createElementNS(svgNS, 'svg')
+        svg.setAttribute('width', String(SVG_SIZE))
+        svg.setAttribute('height', String(SVG_SIZE))
+        svg.setAttribute('viewBox', `0 0 ${SVG_SIZE} ${SVG_SIZE}`)
+
+        const path = document.createElementNS(svgNS, 'path')
+        path.setAttribute('d', d)
+        path.setAttribute('stroke', '#aa66ff')
+        path.setAttribute('stroke-width', '1.5')
+        path.setAttribute('fill', 'none')
+        path.setAttribute('stroke-linecap', 'round')
+        path.setAttribute('stroke-linejoin', 'round')
+        svg.appendChild(path)
+
+        // Start dot
+        const startDot = document.createElementNS(svgNS, 'circle')
+        startDot.setAttribute('cx', (pts[0].x * scale + PAD).toFixed(1))
+        startDot.setAttribute('cy', (pts[0].y * scale + PAD).toFixed(1))
+        startDot.setAttribute('r', '2')
+        startDot.setAttribute('fill', '#cc88ff')
+        svg.appendChild(startDot)
+
+        card.appendChild(svg)
+
+        const nameEl = el('div', 'glyph-card-name')
+        nameEl.textContent = tpl.name.replace(/^(Vector|Quality|Target|Duration)\s+/, '')
+        card.appendChild(nameEl)
+
+        row.appendChild(card)
+      }
+      group.appendChild(row)
+      panel.appendChild(group)
+    }
+
+    return panel
   }
 
   private _buildGrimoire(): HTMLDivElement {
@@ -1704,6 +1809,8 @@ export class UIManager {
       const btn = this._root.querySelector<HTMLElement>(`#phase-btn-${phase}`)
       if (btn) btn.classList.toggle('active', phase === active)
     }
+    const refPanel = this._root.querySelector<HTMLElement>('#glyph-ref-panel')
+    if (refPanel) refPanel.classList.toggle('visible', active === 'GLYPH')
   }
 
   // ─── Store subscription ───────────────────────────────────────────────────
