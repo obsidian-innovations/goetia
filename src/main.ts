@@ -69,6 +69,11 @@ async function init(): Promise<void> {
       ui.updatePhaseButtons(phase)
     },
 
+    onDifficultyChange(difficulty) {
+      ritualCanvas.setGlyphDifficulty(difficulty)
+      useCanvasStore.getState().setGlyphDifficulty(difficulty)
+    },
+
     onBind() {
       const sigil = ritualCanvas.composeSigil()
       if (!sigil) {

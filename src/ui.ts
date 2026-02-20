@@ -6,7 +6,7 @@ import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
 import type { DrawingPhase } from '@stores/canvasStore'
-import type { Demon, Sigil, SigilVisualState } from '@engine/sigil/Types'
+import type { Demon, GlyphDifficulty, Sigil, SigilVisualState } from '@engine/sigil/Types'
 import type { AttentionGesture } from '@engine/charging/AttentionGesture'
 import type { DemonicDemand } from '@engine/demands/DemandEngine'
 import type { ResearchState } from '@engine/research/ResearchEngine'
@@ -30,6 +30,7 @@ export interface UICallbacks {
   onCastHex?: (targetLabel: string, sigilId: string) => void
   onCastWard?: (sigilId: string) => void
   onCreateCoven?: (name: string) => void
+  onDifficultyChange?: (difficulty: GlyphDifficulty) => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -168,6 +169,27 @@ const STYLE = `
   #glyph-toggle-btn.visible { display: block; }
   #glyph-toggle-btn:hover { border-color: #7733aa; color: #cc88ff; }
   #glyph-toggle-btn.open { border-color: #aa66ff; background: rgba(80,20,130,0.7); color: #ddb8ff; }
+
+  /* ── Difficulty selector ── */
+  #difficulty-selector {
+    display: none; align-items: center; gap: 0.3rem;
+    pointer-events: all;
+  }
+  #difficulty-selector.visible { display: flex; }
+  #difficulty-selector .diff-label {
+    font-size: 0.55rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #664488; margin-right: 0.1rem;
+  }
+  .diff-btn {
+    padding: 0.25rem 0.5rem; border: 1px solid #331144; background: rgba(20,8,40,0.7);
+    color: #776688; border-radius: 3px; cursor: pointer;
+    font-family: inherit; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em;
+    transition: all 0.2s;
+  }
+  .diff-btn:hover:not(.active) { border-color: #553377; color: #aa88cc; }
+  .diff-btn.active-easy   { border-color: #448833; background: rgba(30,60,20,0.7); color: #88cc66; }
+  .diff-btn.active-normal { border-color: #aa66ff; background: rgba(80,20,130,0.7); color: #ddb8ff; }
+  .diff-btn.active-hard   { border-color: #cc4444; background: rgba(80,20,20,0.7); color: #ff8888; }
 
   /* ── Grimoire ── */
   #screen-grimoire { background: rgba(8,7,15,0.95); pointer-events: all; }
@@ -1138,6 +1160,24 @@ export class UIManager {
     })
     toolbar.appendChild(glyphToggle)
 
+    // Difficulty selector (only shown in GLYPH phase)
+    const diffSelector = el('div', '', 'difficulty-selector')
+    const diffLabel = el('span', 'diff-label')
+    diffLabel.textContent = 'Difficulty:'
+    diffSelector.appendChild(diffLabel)
+    const difficulties: GlyphDifficulty[] = ['easy', 'normal', 'hard']
+    for (const diff of difficulties) {
+      const btn = el('button', 'diff-btn', `diff-btn-${diff}`)
+      btn.textContent = diff
+      if (diff === 'normal') btn.classList.add('active-normal')
+      btn.addEventListener('click', () => {
+        this._callbacks?.onDifficultyChange?.(diff)
+        this._updateDifficultyButtons(diff)
+      })
+      diffSelector.appendChild(btn)
+    }
+    toolbar.appendChild(diffSelector)
+
     const bindBtn = el('button', '', 'bind-btn')
     bindBtn.textContent = 'Bind'
     bindBtn.addEventListener('click', () => this._callbacks?.onBind())
@@ -1833,8 +1873,10 @@ export class UIManager {
     }
     const toggleBtn = this._root.querySelector<HTMLElement>('#glyph-toggle-btn')
     const refPanel  = this._root.querySelector<HTMLElement>('#glyph-ref-panel')
+    const diffSelector = this._root.querySelector<HTMLElement>('#difficulty-selector')
     const inGlyph = active === 'GLYPH'
     if (toggleBtn) toggleBtn.classList.toggle('visible', inGlyph)
+    if (diffSelector) diffSelector.classList.toggle('visible', inGlyph)
     if (!inGlyph && refPanel) {
       // Collapse panel when leaving GLYPH phase
       refPanel.classList.remove('visible')
@@ -1842,6 +1884,15 @@ export class UIManager {
         toggleBtn.classList.remove('open')
         toggleBtn.textContent = 'Glyphs ▾'
       }
+    }
+  }
+
+  private _updateDifficultyButtons(active: GlyphDifficulty): void {
+    for (const diff of ['easy', 'normal', 'hard'] as GlyphDifficulty[]) {
+      const btn = this._root.querySelector<HTMLElement>(`#diff-btn-${diff}`)
+      if (!btn) continue
+      btn.classList.remove('active-easy', 'active-normal', 'active-hard')
+      if (diff === active) btn.classList.add(`active-${diff}`)
     }
   }
 
