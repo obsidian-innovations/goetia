@@ -1,4 +1,5 @@
-import type { Point, GlyphId, GlyphInvariant, StrokeResult, GlyphResult } from './Types'
+import type { Point, GlyphId, GlyphInvariant, StrokeResult, GlyphResult, GlyphDifficulty, GlyphDifficultyConfig } from './Types'
+import { GLYPH_DIFFICULTY_CONFIGS } from './Types'
 import { GLYPH_TEMPLATES } from './GlyphLibrary'
 import {
   signedArea,
@@ -32,7 +33,7 @@ function checkInvariant(
   }
 }
 
-function procrustesScore(drawn: Point[], template: Point[]): number {
+function procrustesScore(drawn: Point[], template: Point[], rmsdMultiplier: number): number {
   if (drawn.length === 0 || template.length === 0) return 0
 
   // Step 1 — Center both at origin
@@ -86,14 +87,24 @@ function procrustesScore(drawn: Point[], template: Point[]): number {
     }, 0) / drawnRotated.length
   )
 
-  // Step 5 — Convert to score
-  return Math.max(0, 1 - rmsd * 2)
+  // Step 5 — Convert to score (rmsdMultiplier controls strictness)
+  return Math.max(0, 1 - rmsd * rmsdMultiplier)
 }
 
 // ─── GlyphRecognizer ─────────────────────────────────────────────────────────
 
 export class GlyphRecognizer {
   private readonly RESAMPLE_COUNT = 32
+  private _config: GlyphDifficultyConfig
+
+  constructor(difficulty: GlyphDifficulty = 'normal') {
+    this._config = GLYPH_DIFFICULTY_CONFIGS[difficulty]
+  }
+
+  /** Change the difficulty level at runtime. */
+  setDifficulty(difficulty: GlyphDifficulty): void {
+    this._config = GLYPH_DIFFICULTY_CONFIGS[difficulty]
+  }
 
   recognize(strokes: StrokeResult[]): GlyphResult {
     // Guard: empty or all strokes have fewer than 3 points
@@ -137,19 +148,17 @@ export class GlyphRecognizer {
       }
       if (!invariantsPassed) continue
 
-      // 3. Procrustes score
+      // 3. Procrustes score (RMSD multiplier varies by difficulty)
       const templateNorm = normalizePathToUnitSpace(template.canonicalPath)
       const templateResampled = resamplePath(templateNorm, this.RESAMPLE_COUNT)
-      const score = procrustesScore(drawnResampled, templateResampled)
+      const score = procrustesScore(drawnResampled, templateResampled, this._config.rmsdMultiplier)
       scores.push({ glyph: template.id, confidence: score })
     }
 
     // Sort descending by confidence
     scores.sort((a, b) => b.confidence - a.confidence)
 
-    const CONFIDENCE_THRESHOLD = 0.55
-
-    if (scores.length === 0 || scores[0].confidence < CONFIDENCE_THRESHOLD) {
+    if (scores.length === 0 || scores[0].confidence < this._config.confidenceThreshold) {
       return {
         recognized: null,
         confidence: scores[0]?.confidence ?? 0,
