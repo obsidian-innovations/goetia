@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import type {
   ConnectionResult,
+  GlyphDifficulty,
   GlyphId,
   IntentCoherenceResult,
   PlacedGlyph,
@@ -17,6 +18,7 @@ export type DrawingPhase = 'SEAL' | 'GLYPH' | 'RING'
 interface CanvasState {
   currentDemonId: string | null
   currentPhase: DrawingPhase
+  glyphDifficulty: GlyphDifficulty
   completedConnections: ConnectionResult[]
   sealIntegrity: number
   placedGlyphs: PlacedGlyph[]
@@ -34,6 +36,7 @@ interface CanvasActions {
   setCoherence: (result: IntentCoherenceResult) => void
   setRingResult: (result: RingResult) => void
   setPhase: (phase: DrawingPhase) => void
+  setGlyphDifficulty: (difficulty: GlyphDifficulty) => void
   setComposedSigil: (sigil: Sigil) => void
   resetCanvas: () => void
 }
@@ -45,6 +48,7 @@ type CanvasStore = CanvasState & CanvasActions
 const INITIAL_STATE: CanvasState = {
   currentDemonId: null,
   currentPhase: 'SEAL',
+  glyphDifficulty: 'normal',
   completedConnections: [],
   sealIntegrity: 0,
   placedGlyphs: [],
@@ -98,6 +102,10 @@ export const useCanvasStore = createStore<CanvasStore>((set) => ({
 
   setPhase(phase: DrawingPhase) {
     set({ currentPhase: phase })
+  },
+
+  setGlyphDifficulty(difficulty: GlyphDifficulty) {
+    set({ glyphDifficulty: difficulty })
   },
 
   setComposedSigil(sigil: Sigil) {

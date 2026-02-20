@@ -52,6 +52,23 @@ export type ConnectionResult = {
   valid: boolean;
 };
 
+// ─── Glyph difficulty ─────────────────────────────────────────────────────
+
+export type GlyphDifficulty = 'easy' | 'normal' | 'hard'
+
+export type GlyphDifficultyConfig = {
+  /** Minimum Procrustes score to accept a recognition (0–1) */
+  confidenceThreshold: number
+  /** Multiplier on RMSD when converting to score; higher = stricter */
+  rmsdMultiplier: number
+}
+
+export const GLYPH_DIFFICULTY_CONFIGS: Record<GlyphDifficulty, GlyphDifficultyConfig> = {
+  easy:   { confidenceThreshold: 0.40, rmsdMultiplier: 1.5 },
+  normal: { confidenceThreshold: 0.55, rmsdMultiplier: 2.0 },
+  hard:   { confidenceThreshold: 0.70, rmsdMultiplier: 2.5 },
+}
+
 // ─── Intent glyphs ─────────────────────────────────────────────────────────
 
 export type GlyphInvariant =

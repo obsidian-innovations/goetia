@@ -14,6 +14,7 @@ import { getDemon } from '@engine/demons/DemonRegistry'
 import { useCanvasStore } from '@stores/canvasStore'
 import type { DrawingPhase } from '@stores/canvasStore'
 import type {
+  GlyphDifficulty,
   NodeId,
   Point,
   PointerInputEvent,
@@ -141,6 +142,11 @@ export class RitualCanvas {
    */
   setVisibleGeometry(geometry: import('@engine/sigil/Types').SealGeometry | null): void {
     this._sealLayer.setVisibleGeometry(geometry)
+  }
+
+  /** Change glyph recognition difficulty at runtime. */
+  setGlyphDifficulty(difficulty: GlyphDifficulty): void {
+    this._glyphRecognizer.setDifficulty(difficulty)
   }
 
   /** Set the PvE encounter interference intensity (0 = none, 1 = maximum). */
