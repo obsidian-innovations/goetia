@@ -261,10 +261,12 @@ export class RitualCanvas {
 
     const store = useCanvasStore.getState()
     store.addConnection(result)
-    store.updateSealIntegrity(this._sealReconstructor.getSealIntegrity())
+    const integrity = this._sealReconstructor.getSealIntegrity()
+    store.updateSealIntegrity(integrity)
 
     const connections = this._sealReconstructor.getCompletedConnections()
     this._sealLayer.setConnections(connections)
+    this._sealLayer.setSealIntegrity(integrity)
   }
 
   private _handleGlyph(stroke: StrokeResult): void {

@@ -12,6 +12,13 @@ const NODE_DONE    = 0xaa66ff
 const NODE_UNKNOWN = 0x332244  // undiscovered node placeholder
 const EDGE_UNKNOWN = 0x3a1a55  // undiscovered edge hint
 
+// ─── Seal-complete highlight ─────────────────────────────────────────────
+const SEAL_HIGHLIGHT_THRESHOLD = 0.75
+const GLOW_COLOR   = 0xddaaff
+const GLOW_WIDTH   = 8
+const GLOW_ALPHA   = 0.35
+const NODE_GLOW_COLOR = 0xeeccff
+
 /**
  * Vertical insets (px) that keep the seal clear of the UI chrome.
  * SEAL_PAD_TOP reserves space for the ritual header bar.
@@ -42,6 +49,7 @@ export class SealLayer extends Container {
   private _visibleGeometry: SealGeometry | null = null
   private _connections: ConnectionResult[] = []
   private _activeStroke: Point[] = []
+  private _sealIntegrity: number = 0
   private _w: number
   private _h: number
 
@@ -73,6 +81,11 @@ export class SealLayer extends Container {
 
   setConnections(connections: ConnectionResult[]): void {
     this._connections = connections
+    this._render()
+  }
+
+  setSealIntegrity(integrity: number): void {
+    this._sealIntegrity = integrity
     this._render()
   }
 
@@ -198,13 +211,33 @@ export class SealLayer extends Container {
       g.stroke({ color: 0x6633aa, width: 1.5, alpha: 0.6 })
     }
 
-    // 3. Completed connections (coloured by accuracy)
+    const sealHighlighted = this._sealIntegrity >= SEAL_HIGHLIGHT_THRESHOLD
+
+    // 3a. Glow pass — wide semi-transparent stroke behind completed edges
+    if (sealHighlighted) {
+      for (const conn of this._connections) {
+        const edge = edges.find(
+          e => e.fromNode === conn.fromNode && e.toNode === conn.toNode,
+        )
+        if (!edge || edge.canonicalPath.length < 2) continue
+        const path = edge.canonicalPath
+        const first = this._toPixel(path[0])
+        g.moveTo(first.x, first.y)
+        for (let i = 1; i < path.length; i++) {
+          const p = this._toPixel(path[i])
+          g.lineTo(p.x, p.y)
+        }
+        g.stroke({ color: GLOW_COLOR, width: GLOW_WIDTH, alpha: GLOW_ALPHA })
+      }
+    }
+
+    // 3b. Completed connections (coloured by accuracy)
     for (const conn of this._connections) {
       const edge = edges.find(
         e => e.fromNode === conn.fromNode && e.toNode === conn.toNode,
       )
       if (!edge || edge.canonicalPath.length < 2) continue
-      const color =
+      const color = sealHighlighted ? COLOR_BRIGHT :
         conn.accuracy >= 0.75 ? COLOR_BRIGHT :
         conn.accuracy >= 0.50 ? COLOR_MEDIUM :
         COLOR_DIM
@@ -227,8 +260,13 @@ export class SealLayer extends Container {
       const known = knownNodeIds === null || knownNodeIds.has(node.id)
 
       if (known) {
+        // Outer glow for nodes when seal is highlighted
+        if (sealHighlighted && done) {
+          g.circle(px, py, 10)
+          g.fill({ color: NODE_GLOW_COLOR, alpha: 0.2 })
+        }
         g.circle(px, py, done ? 6 : 4)
-        g.fill({ color: done ? NODE_DONE : NODE_GHOST, alpha: done ? 1 : 0.55 })
+        g.fill({ color: done ? (sealHighlighted ? NODE_GLOW_COLOR : NODE_DONE) : NODE_GHOST, alpha: done ? 1 : 0.55 })
       } else {
         // Unknown: faint placeholder with a small X to hint at hidden nodes
         g.circle(px, py, 3)
