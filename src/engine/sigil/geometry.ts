@@ -132,6 +132,41 @@ export function discreteFrechetDistance(pathA: Point[], pathB: Point[]): number 
   return ca[n - 1][m - 1];
 }
 
+// ─── smoothPath ──────────────────────────────────────────────────────────
+
+/**
+ * Applies a symmetric moving-average filter to reduce high-frequency jitter
+ * (e.g. finger wobble) while preserving the overall shape of the path.
+ *
+ * Each interior point is replaced by the unweighted mean of itself and its
+ * `radius` neighbours on each side.  The first and last points are kept
+ * unchanged so the stroke endpoints are not shifted.
+ *
+ * `radius` must be >= 1.  If the path is too short for the window the
+ * original path is returned unchanged.
+ */
+export function smoothPath(points: Point[], radius: number = 2): Point[] {
+  if (radius < 1 || points.length < radius * 2 + 1) return points
+
+  const out: Point[] = [points[0]]
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const lo = Math.max(0, i - radius)
+    const hi = Math.min(points.length - 1, i + radius)
+    let sx = 0
+    let sy = 0
+    const count = hi - lo + 1
+    for (let j = lo; j <= hi; j++) {
+      sx += points[j].x
+      sy += points[j].y
+    }
+    out.push({ x: sx / count, y: sy / count })
+  }
+
+  out.push(points[points.length - 1])
+  return out
+}
+
 // ─── pathLength ──────────────────────────────────────────────────────────────
 
 /**

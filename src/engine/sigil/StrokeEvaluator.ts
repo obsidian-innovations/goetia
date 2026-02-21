@@ -1,7 +1,7 @@
 import type { Point, PointerInputEvent, StrokeResult } from './Types';
 
 const DUPLICATE_THRESHOLD = 1; // pixels
-const RDP_EPSILON = 3.0;
+const RDP_EPSILON = 4.5;
 const PRESSURE_PROFILE_SAMPLES = 20;
 const MIN_STROKE_LENGTH = 20; // pixels
 
