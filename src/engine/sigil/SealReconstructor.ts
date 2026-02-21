@@ -4,6 +4,7 @@ import {
   discreteFrechetDistance,
   normalizePathToUnitSpace,
   resamplePath,
+  smoothPath,
 } from './geometry'
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -14,11 +15,17 @@ const RESAMPLE_N = 32
 /**
  * Maximum Fréchet distance (in normalised [0,1] space) treated as a
  * perfect miss. Scores are linearly interpolated from 0 → this value.
+ * Widened from 0.5 to accommodate finger-drawn stroke wobble.
  */
-const MAX_FRECHET = 0.5
+const MAX_FRECHET = 0.65
 
-/** Minimum accuracy for a connection to be marked valid */
-const MIN_ACCURACY = 0.25
+/** Minimum accuracy for a connection to be marked valid.
+ *  Lowered from 0.25 to be more forgiving with touch input. */
+const MIN_ACCURACY = 0.15
+
+/** Moving-average radius applied to the resampled stroke to suppress
+ *  high-frequency finger jitter before Fréchet comparison. */
+const SMOOTH_RADIUS = 2
 
 // ─── SealReconstructor ────────────────────────────────────────────────────
 
@@ -63,10 +70,11 @@ export class SealReconstructor {
         ? stroke.simplifiedPoints
         : stroke.pathPoints
 
-    // Resample stroke and canonical path to the same count
-    const strokeResampled = resamplePath(
-      normalizePathToUnitSpace(rawPts),
-      RESAMPLE_N,
+    // Resample stroke and canonical path to the same count, then smooth
+    // the player's stroke to suppress finger jitter before comparison
+    const strokeResampled = smoothPath(
+      resamplePath(normalizePathToUnitSpace(rawPts), RESAMPLE_N),
+      SMOOTH_RADIUS,
     )
     const canonicalResampled = resamplePath(
       normalizePathToUnitSpace(edge.canonicalPath),

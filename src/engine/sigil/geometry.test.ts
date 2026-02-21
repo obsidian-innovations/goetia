@@ -3,6 +3,7 @@ import {
   normalizePathToUnitSpace,
   resamplePath,
   discreteFrechetDistance,
+  smoothPath,
   pathLength,
   nearestPointIndex,
   signedArea,
@@ -147,6 +148,65 @@ describe('discreteFrechetDistance', () => {
     expect(discreteFrechetDistance([], path)).toBe(0);
     expect(discreteFrechetDistance(path, [])).toBe(0);
     expect(discreteFrechetDistance([], [])).toBe(0);
+  });
+});
+
+// ─── smoothPath ──────────────────────────────────────────────────────────────
+
+describe('smoothPath', () => {
+  it('preserves first and last points exactly', () => {
+    const path: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 2 },
+      { x: 3, y: 1 },
+      { x: 4, y: 3 },
+      { x: 5, y: 0 },
+    ];
+    const result = smoothPath(path, 1);
+    expect(result[0]).toEqual(path[0]);
+    expect(result[result.length - 1]).toEqual(path[path.length - 1]);
+  });
+
+  it('averages interior points with radius 1', () => {
+    const path: Point[] = [
+      { x: 0, y: 0 },
+      { x: 0, y: 10 },
+      { x: 0, y: 0 },
+    ];
+    const result = smoothPath(path, 1);
+    // middle point = average of all three: y = (0+10+0)/3 ≈ 3.33
+    expect(result[1].y).toBeCloseTo(10 / 3);
+  });
+
+  it('returns original path when too short for window', () => {
+    const path: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ];
+    const result = smoothPath(path, 2);
+    expect(result).toEqual(path);
+  });
+
+  it('returns original path for radius < 1', () => {
+    const path: Point[] = [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+      { x: 2, y: 0 },
+    ];
+    expect(smoothPath(path, 0)).toEqual(path);
+  });
+
+  it('reduces jitter amplitude', () => {
+    // Zigzag around y = 5
+    const path: Point[] = Array.from({ length: 11 }, (_, i) => ({
+      x: i,
+      y: 5 + (i % 2 === 0 ? 1 : -1),
+    }));
+    const smoothed = smoothPath(path, 2);
+    // Interior smoothed points should be closer to y=5 than the original ±1
+    for (let i = 2; i < smoothed.length - 2; i++) {
+      expect(Math.abs(smoothed[i].y - 5)).toBeLessThan(1);
+    }
   });
 });
 
