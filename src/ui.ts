@@ -1,4 +1,4 @@
-import { listDemons, STARTER_DEMON_ID } from '@engine/demons/DemonRegistry'
+import { listDemons } from '@engine/demons/DemonRegistry'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
@@ -1057,8 +1057,7 @@ export class UIManager {
     const research = useResearchStore.getState().researching
     for (const demon of demons) {
       const rs = research[demon.id] ?? null
-      const isStarter = demon.id === STARTER_DEMON_ID
-      const isUnlocked = isStarter || (rs !== null && rs.progress >= 1)
+      const isUnlocked = true
       grid.appendChild(this._demonCard(demon, rs, isUnlocked))
     }
   }
