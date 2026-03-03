@@ -26,7 +26,7 @@ import type {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /** Pixel radius within which a pointer-down snaps to a seal node */
-const SNAP_THRESHOLD_PX = 44
+const SNAP_THRESHOLD_PX = 56
 
 /** Minimum stroke total-length (px) below which we discard the stroke */
 const MIN_STROKE_PX = 20

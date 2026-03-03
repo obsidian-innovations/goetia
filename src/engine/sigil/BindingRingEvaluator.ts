@@ -30,7 +30,7 @@ export class BindingRingEvaluator {
       pointDeviationFromCircle(p, cx, cy, radius),
     );
     const rms = rmsDeviation(deviations);
-    return Math.max(0, 1 - rms / radius);
+    return Math.max(0, 1 - rms / (radius * 1.2));
   }
 
   private computeClosure(points: Point[], radius: number): number {
@@ -45,7 +45,7 @@ export class BindingRingEvaluator {
     const allDefault = pressureProfile.every((v) => Math.abs(v - 0.5) < 0.01);
     if (allDefault) return 0.7;
     const stdDev = standardDeviation(pressureProfile);
-    return Math.max(0, 1 - stdDev * 4);
+    return Math.max(0, 1 - stdDev * 3);
   }
 
   private computeWeakPoints(
@@ -54,7 +54,7 @@ export class BindingRingEvaluator {
     cy: number,
     radius: number,
   ): RingWeakPoint[] {
-    const SEGMENT_COUNT = 16;
+    const SEGMENT_COUNT = 12;
     const segmentSize = (2 * Math.PI) / SEGMENT_COUNT;
 
     const deviations = points.map((p) =>
@@ -87,7 +87,7 @@ export class BindingRingEvaluator {
     for (let i = 0; i < SEGMENT_COUNT; i++) {
       if (
         buckets[i].length > 0 &&
-        segmentMeans[i] > 1.5 * overallMean &&
+        segmentMeans[i] > 2.0 * overallMean &&
         segmentMeans[i] > NOISE_FLOOR
       ) {
         weakPoints.push({
@@ -117,7 +117,7 @@ export class BindingRingEvaluator {
       circularity * 0.40 +
       closure * 0.35 +
       consistency * 0.25;
-    const penalty = weakPoints.length * 0.05;
+    const penalty = weakPoints.length * 0.03;
     const overallStrength = Math.max(0, rawStrength - penalty);
 
     return {

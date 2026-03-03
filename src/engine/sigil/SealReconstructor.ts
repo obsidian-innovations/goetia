@@ -17,15 +17,15 @@ const RESAMPLE_N = 32
  * perfect miss. Scores are linearly interpolated from 0 → this value.
  * Widened from 0.5 to accommodate finger-drawn stroke wobble.
  */
-const MAX_FRECHET = 0.65
+const MAX_FRECHET = 0.80
 
 /** Minimum accuracy for a connection to be marked valid.
  *  Lowered from 0.25 to be more forgiving with touch input. */
-const MIN_ACCURACY = 0.15
+const MIN_ACCURACY = 0.10
 
 /** Moving-average radius applied to the resampled stroke to suppress
  *  high-frequency finger jitter before Fréchet comparison. */
-const SMOOTH_RADIUS = 2
+const SMOOTH_RADIUS = 3
 
 // ─── SealReconstructor ────────────────────────────────────────────────────
 
