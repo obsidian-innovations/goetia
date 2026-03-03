@@ -70,33 +70,23 @@ const GLYPH_TEMPLATES: GlyphTemplate[] = [
   },
 
   // ── VECTOR_DIFFUSE ────────────────────────────────────────────────────────
-  // Y-shape: stem up from bottom, fork left then backtrack and fork right
+  // Downward arc: smooth curve from upper-left to upper-right, bowing
+  // downward; power spreading outward in all directions
   {
     id: GLYPHS.VECTOR_DIFFUSE,
     name: 'Vector Diffuse',
     intent: 'Spread power in all directions',
     strokeCount: 1,
     invariants: ['single_stroke', 'must_not_close'],
-    // 12 points: stem (0.5,0.9)→(0.5,0.5), left arm →(0.1,0.2),
-    // backtrack to (0.5,0.5), right arm →(0.9,0.2)
-    canonicalPath: [
-      // Stem: 4 pts (0.5,0.9) → (0.5,0.5)
-      pt(0.5, 0.9),
-      pt(0.5, 0.767),
-      pt(0.5, 0.633),
-      pt(0.5, 0.5),
-      // Left arm: 3 more pts → (0.1,0.2)
-      pt(0.367, 0.4),
-      pt(0.233, 0.3),
-      pt(0.1,   0.2),
-      // Backtrack through midpoint to (0.5,0.5): 2 pts
-      pt(0.3,   0.35),
-      pt(0.5,   0.5),
-      // Right arm: 3 more pts → (0.9,0.2)
-      pt(0.633, 0.4),
-      pt(0.767, 0.3),
-      pt(0.9,   0.2),
-    ],
+    // 10 pts along a parabolic arc from (0.1,0.2) through (0.5,0.85) to (0.9,0.2)
+    canonicalPath: Array.from({ length: 10 }, (_, i) => {
+      const t = i / 9 // 0 → 1
+      // x goes linearly 0.1 → 0.9
+      const x = 0.1 + 0.8 * t
+      // y follows a downward parabola: peaks at t=0.5
+      const y = 0.2 + 0.65 * 4 * t * (1 - t)
+      return pt(x, y)
+    }),
   },
 
   // ── QUALITY_SHARP ─────────────────────────────────────────────────────────
@@ -261,23 +251,18 @@ const GLYPH_TEMPLATES: GlyphTemplate[] = [
   },
 
   // ── DURATION_SUSTAINED ────────────────────────────────────────────────────
-  // Lemniscate (figure-eight); continuous, self-renewing flow
+  // Horizontal ellipse; continuous, self-renewing flow
   {
     id: GLYPHS.DURATION_SUSTAINED,
     name: 'Duration Sustained',
     intent: 'Effect persists continuously',
     strokeCount: 1,
     invariants: ['single_stroke', 'must_close'],
-    // 16 pts of the lemniscate of Bernoulli:
-    // t = i/16 * 2π
-    // x = 0.5 + 0.35 * cos(t) / (1 + sin(t)²)
-    // y = 0.5 + 0.25 * sin(t)*cos(t) / (1 + sin(t)²)
-    canonicalPath: Array.from({ length: 16 }, (_, i) => {
-      const t = (i / 16) * 2 * Math.PI
-      const s = Math.sin(t)
-      const c = Math.cos(t)
-      const d = 1 + s * s
-      return pt(0.5 + (0.35 * c) / d, 0.5 + (0.25 * s * c) / d)
+    // 17 pts of a horizontal ellipse (wider than tall, easier to draw than lemniscate):
+    // x = 0.5 + 0.35*cos(angle), y = 0.5 + 0.20*sin(angle)
+    canonicalPath: Array.from({ length: 17 }, (_, i) => {
+      const angle = (i / 16) * 2 * Math.PI
+      return pt(0.5 + 0.35 * Math.cos(angle), 0.5 + 0.20 * Math.sin(angle))
     }),
   },
 

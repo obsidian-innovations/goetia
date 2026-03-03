@@ -97,7 +97,7 @@ export class GlyphRecognizer {
   private readonly RESAMPLE_COUNT = 32
   private _config: GlyphDifficultyConfig
 
-  constructor(difficulty: GlyphDifficulty = 'normal') {
+  constructor(difficulty: GlyphDifficulty = 'easy') {
     this._config = GLYPH_DIFFICULTY_CONFIGS[difficulty]
   }
 
@@ -148,10 +148,14 @@ export class GlyphRecognizer {
       }
       if (!invariantsPassed) continue
 
-      // 3. Procrustes score (RMSD multiplier varies by difficulty)
+      // 3. Procrustes score — try both forward and reversed drawn path,
+      //    keep the better score so players can draw in either direction
       const templateNorm = normalizePathToUnitSpace(template.canonicalPath)
       const templateResampled = resamplePath(templateNorm, this.RESAMPLE_COUNT)
-      const score = procrustesScore(drawnResampled, templateResampled, this._config.rmsdMultiplier)
+      const forwardScore = procrustesScore(drawnResampled, templateResampled, this._config.rmsdMultiplier)
+      const drawnReversed = [...drawnResampled].reverse()
+      const reverseScore = procrustesScore(drawnReversed, templateResampled, this._config.rmsdMultiplier)
+      const score = Math.max(forwardScore, reverseScore)
       scores.push({ glyph: template.id, confidence: score })
     }
 

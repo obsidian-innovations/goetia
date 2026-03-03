@@ -73,12 +73,21 @@ describe('GlyphRecognizer', () => {
     }
   })
 
-  it('defaults to normal difficulty', () => {
+  it('defaults to easy difficulty', () => {
     const recognizer = new GlyphRecognizer()
     const template = GLYPH_TEMPLATES.find(t => t.id === GLYPHS.VECTOR_OUT)!
     const stroke = makeStroke(template.canonicalPath)
     const result = recognizer.recognize([stroke])
     expect(result.recognized).toBe(GLYPHS.VECTOR_OUT)
+  })
+
+  it('recognizes a path drawn in reverse direction', () => {
+    const recognizer = new GlyphRecognizer()
+    const template = GLYPH_TEMPLATES.find(t => t.id === GLYPHS.QUALITY_SHARP)!
+    const reversed = [...template.canonicalPath].reverse()
+    const stroke = makeStroke(reversed)
+    const result = recognizer.recognize([stroke])
+    expect(result.recognized).toBe(GLYPHS.QUALITY_SHARP)
   })
 
   it('easy difficulty recognizes all canonical paths', () => {
