@@ -17,9 +17,9 @@ function checkInvariant(
 ): boolean {
   switch (invariant) {
     case 'must_close':
-      return isPathClosed(stroke.simplifiedPoints, 0.20)
+      return isPathClosed(stroke.simplifiedPoints, 0.25)
     case 'must_not_close':
-      return !isPathClosed(stroke.simplifiedPoints, 0.20)
+      return !isPathClosed(stroke.simplifiedPoints, 0.25)
     case 'must_self_intersect':
       return doesPathSelfIntersect(stroke.simplifiedPoints)
     case 'single_stroke':

@@ -30,7 +30,7 @@ export class BindingRingEvaluator {
       pointDeviationFromCircle(p, cx, cy, radius),
     );
     const rms = rmsDeviation(deviations);
-    return Math.max(0, 1 - rms / radius);
+    return Math.max(0, 1 - rms / (radius * 1.2));
   }
 
   private computeClosure(points: Point[], radius: number): number {
@@ -54,7 +54,7 @@ export class BindingRingEvaluator {
     cy: number,
     radius: number,
   ): RingWeakPoint[] {
-    const SEGMENT_COUNT = 16;
+    const SEGMENT_COUNT = 12;
     const segmentSize = (2 * Math.PI) / SEGMENT_COUNT;
 
     const deviations = points.map((p) =>

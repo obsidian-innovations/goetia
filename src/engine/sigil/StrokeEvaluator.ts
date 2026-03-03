@@ -1,9 +1,9 @@
 import type { Point, PointerInputEvent, StrokeResult } from './Types';
 
-const DUPLICATE_THRESHOLD = 1; // pixels
-const RDP_EPSILON = 4.5;
+const DUPLICATE_THRESHOLD = 2; // pixels — more aggressive dedup suppresses mobile jitter
+const RDP_EPSILON = 3.0; // lower ε preserves more shape fidelity for curved strokes
 const PRESSURE_PROFILE_SAMPLES = 20;
-const MIN_STROKE_LENGTH = 20; // pixels
+const MIN_STROKE_LENGTH = 15; // pixels — accepts shorter intentional strokes on mobile
 
 export class StrokeEvaluator {
   private points: PointerInputEvent[] = [];
