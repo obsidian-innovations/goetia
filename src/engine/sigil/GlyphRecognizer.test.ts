@@ -31,8 +31,8 @@ describe('GlyphRecognizer', () => {
       expect(result.recognized, `Expected ${template.id} to recognize itself`).toBe(template.id)
       expect(
         result.confidence,
-        `Expected confidence >= 0.55 for ${template.id}`
-      ).toBeGreaterThanOrEqual(0.55)
+        `Expected confidence >= 0.45 for ${template.id}`
+      ).toBeGreaterThanOrEqual(0.45)
     }
   })
 

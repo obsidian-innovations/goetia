@@ -64,9 +64,9 @@ export type GlyphDifficultyConfig = {
 }
 
 export const GLYPH_DIFFICULTY_CONFIGS: Record<GlyphDifficulty, GlyphDifficultyConfig> = {
-  easy:   { confidenceThreshold: 0.40, rmsdMultiplier: 1.5 },
-  normal: { confidenceThreshold: 0.55, rmsdMultiplier: 2.0 },
-  hard:   { confidenceThreshold: 0.70, rmsdMultiplier: 2.5 },
+  easy:   { confidenceThreshold: 0.30, rmsdMultiplier: 1.2 },
+  normal: { confidenceThreshold: 0.45, rmsdMultiplier: 1.6 },
+  hard:   { confidenceThreshold: 0.60, rmsdMultiplier: 2.0 },
 }
 
 // ─── Intent glyphs ─────────────────────────────────────────────────────────
