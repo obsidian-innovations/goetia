@@ -299,9 +299,11 @@ async function init(): Promise<void> {
 
       // Apply misfire effects when a new clash result arrives and defender won
       if (pvpState.lastClashResult !== _prevClashResult && pvpState.lastClashResult.winner === 'defender') {
-        // TODO: ClashResult doesn't carry a hex reference — use the first outgoing
-        // hex as a best-effort proxy. Proper fix requires adding hexId to ClashResult.
-        const outgoingHex = pvpState.activeHexes.find(h => h.type === 'hex')
+        const clashHexId = pvpState.lastClashResult!.hexId
+        const outgoingHex = clashHexId
+          ? pvpState.activeHexes.find(h => h.id === clashHexId)
+            ?? pvpState.activeHexes.find(h => h.type === 'hex')
+          : pvpState.activeHexes.find(h => h.type === 'hex')
         if (outgoingHex) {
           const misfire = calculateMisfire(outgoingHex.sigil, pvpState.lastClashResult)
           useCorruptionStore.getState().addCorruption({

@@ -155,6 +155,13 @@ describe('resolveHexWithWard', () => {
     expect(result!.hexNeutralized).toBe(true)
   })
 
+  it('sets hexId on the clash result to the incoming hex ID', () => {
+    const hex = castHex('p1', 'p2', makeSigil({ integrity: 0.4 }), makeDemon('Baron', ['destruction']), 0)
+    const ward = castWard('p2', makeSigil({ integrity: 0.9 }), makeDemon('King', ['protection']), 0)
+    const result = resolveHexWithWard(hex, [ward], 1000)
+    expect(result!.clashResult.hexId).toBe(hex.id)
+  })
+
   it('sets hexNeutralized=false when hex wins', () => {
     const hex = castHex('p1', 'p2', makeSigil({ integrity: 0.95, coherence: 0.95 }), makeDemon('King', ['binding']), 0)
     const ward = castWard('p2', makeSigil({ integrity: 0.1, coherence: 0.1 }), makeDemon('Baron', ['liberation']), 0)

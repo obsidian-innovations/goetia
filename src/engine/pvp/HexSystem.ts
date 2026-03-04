@@ -97,10 +97,13 @@ export function resolveHexWithWard(
     w.sigil.overallIntegrity > best.sigil.overallIntegrity ? w : best,
   )
 
-  const clashResult = resolveClash({
-    attacker: { sigil: incomingHex.sigil, demon: incomingHex.demon },
-    defender: { sigil: bestWard.sigil, demon: bestWard.demon },
-  })
+  const clashResult: ClashResult = {
+    ...resolveClash({
+      attacker: { sigil: incomingHex.sigil, demon: incomingHex.demon },
+      defender: { sigil: bestWard.sigil, demon: bestWard.demon },
+    }),
+    hexId: incomingHex.id,
+  }
 
   const hexNeutralized = clashResult.winner !== 'attacker'
 

@@ -26,6 +26,8 @@ export interface ClashResult {
   score: number
   /** Human-readable narrative */
   details: string
+  /** ID of the hex that initiated this clash (set when resolved via ward) */
+  hexId?: string
 }
 
 // ─── Rank power ────────────────────────────────────────────────────────────
