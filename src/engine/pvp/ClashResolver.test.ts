@@ -116,6 +116,16 @@ describe('getDomainModifier', () => {
   })
 })
 
+// ─── resolveClash — hexId ─────────────────────────────────────────────────
+
+describe('resolveClash — hexId', () => {
+  it('does not set hexId (callers set it)', () => {
+    const input = makeInput('Duke', ['knowledge'], 0.7, 0.7, 'Duke', ['knowledge'], 0.7, 0.7)
+    const result = resolveClash(input)
+    expect(result.hexId).toBeUndefined()
+  })
+})
+
 // ─── resolveClash — rank matchups ──────────────────────────────────────────
 
 describe('resolveClash — rank hierarchy', () => {
