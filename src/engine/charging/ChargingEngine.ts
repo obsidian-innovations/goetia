@@ -4,6 +4,7 @@ import type { DemonRank } from '@engine/sigil/Types'
 
 export interface ChargingState {
   sigilId: string
+  demonId: string
   demonRank: DemonRank
   startedAt: number
   /** 0–1; how far along the charging process the sigil is */
@@ -40,10 +41,11 @@ const DECAY_RATE_PER_SEC = 0.002
 
 // ─── Factory ───────────────────────────────────────────────────────────────
 
-export function createChargingState(sigilId: string, demonRank: DemonRank): ChargingState {
+export function createChargingState(sigilId: string, demonId: string, demonRank: DemonRank): ChargingState {
   const now = Date.now()
   return {
     sigilId,
+    demonId,
     demonRank,
     startedAt: now,
     chargeProgress: 0,

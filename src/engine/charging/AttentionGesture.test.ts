@@ -8,6 +8,7 @@ import type { StrokeResult, RingResult } from '@engine/sigil/Types'
 function makeChargingState(overrides: Partial<ChargingState> = {}): ChargingState {
   return {
     sigilId: 'test',
+    demonId: 'test-demon',
     demonRank: 'Baron',
     startedAt: 0,
     chargeProgress: 0.3,
