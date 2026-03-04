@@ -5,7 +5,7 @@ import type { DemonRank } from '../sigil/Types.ts'
 export type CorruptionStage = 'clean' | 'tainted' | 'compromised' | 'vessel'
 
 export interface CorruptionSource {
-  type: 'pact' | 'sigil_cast' | 'clash_loss' | 'misfire' | 'demand_ignored'
+  type: 'pact' | 'sigil_cast' | 'clash_loss' | 'misfire' | 'demand_ignored' | 'hex_rebound' | 'purification_failed'
   amount: number
   timestamp: number
 }
@@ -29,11 +29,13 @@ const RANK_MULT: Record<DemonRank, number> = {
 
 /** Base corruption per source type before rank multiplier. */
 const BASE_AMOUNTS: Record<CorruptionSource['type'], number> = {
-  sigil_cast:     0.020,
-  clash_loss:     0.080,
-  misfire:        0.050,
-  demand_ignored: 0.040,
-  pact:           0.080,
+  sigil_cast:           0.020,
+  clash_loss:           0.080,
+  misfire:              0.050,
+  demand_ignored:       0.040,
+  pact:                 0.080,
+  hex_rebound:          0.060,
+  purification_failed:  0.100,
 }
 
 // ─── Functions ─────────────────────────────────────────────────────────────

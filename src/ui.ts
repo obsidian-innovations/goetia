@@ -31,6 +31,7 @@ export interface UICallbacks {
   onCastWard?: (sigilId: string) => void
   onCreateCoven?: (name: string) => void
   onDifficultyChange?: (difficulty: GlyphDifficulty) => void
+  onAttemptPurification?: () => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -1554,6 +1555,39 @@ export class UIManager {
     const wardList = el('div', '', 'pvp-ward-list')
     content.appendChild(wardList)
 
+    // ── Cast actions ──────────────────────────────────────────────────────
+    const actionsTitle = el('div', 'pvp-section-title')
+    actionsTitle.style.marginTop = '0.75rem'
+    actionsTitle.textContent = 'Actions'
+    content.appendChild(actionsTitle)
+
+    const actionsRow = el('div', 'pvp-actions')
+    actionsRow.style.cssText = 'display:flex;gap:0.5rem;margin-top:0.4rem;'
+
+    const hexBtn = el('button', '', 'pvp-cast-hex-btn')
+    hexBtn.style.cssText = 'flex:1;padding:0.5rem;border:1px solid #993333;background:#1a0808;color:#cc6666;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;'
+    hexBtn.textContent = 'Cast Hex'
+    hexBtn.addEventListener('click', () => {
+      const target = prompt('Enter target player ID:')
+      if (target) {
+        // Find the best available sigil
+        this._callbacks?.onCastHex?.(target, this._findBestSigilId() ?? '')
+      }
+    })
+    actionsRow.appendChild(hexBtn)
+
+    const wardBtn = el('button', '', 'pvp-cast-ward-btn')
+    wardBtn.style.cssText = 'flex:1;padding:0.5rem;border:1px solid #336699;background:#080818;color:#6688cc;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;'
+    wardBtn.textContent = 'Place Ward'
+    wardBtn.addEventListener('click', () => {
+      const sigilId = this._findBestSigilId()
+      if (sigilId) {
+        this._callbacks?.onCastWard?.(sigilId)
+      }
+    })
+    actionsRow.appendChild(wardBtn)
+    content.appendChild(actionsRow)
+
     // Last clash result link
     const clashBtn = el('button', '', 'pvp-last-clash-btn')
     clashBtn.style.cssText = 'margin-top:0.75rem;padding:0.4rem 1rem;border:1px solid #441133;background:transparent;color:#994433;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;align-self:center;'
@@ -1665,8 +1699,13 @@ export class UIManager {
     vessel.innerHTML = `
       <h2>You Have Become a Vessel</h2>
       <p>The corruption is complete. You are now a conduit for demonic forces. Other practitioners may sense your presence.</p>
+      <button id="vessel-warning-purify">Attempt Purification</button>
       <button id="vessel-warning-dismiss">I Understand</button>
     `
+    vessel.querySelector('#vessel-warning-purify')?.addEventListener('click', () => {
+      this._callbacks?.onAttemptPurification?.()
+      vessel.classList.remove('visible')
+    })
     vessel.querySelector('#vessel-warning-dismiss')?.addEventListener('click', () => {
       vessel.classList.remove('visible')
     })
@@ -1917,6 +1956,21 @@ export class UIManager {
     for (const [key, screen] of Object.entries(this._screens)) {
       screen.classList.toggle('active', key === name)
     }
+  }
+
+  /** Find the best available sigil ID (highest integrity, status complete or resting). */
+  private _findBestSigilId(): string | null {
+    const pages = useGrimoireStore.getState().pages
+    let best: { id: string; integrity: number } | null = null
+    for (const page of pages) {
+      for (const sigil of page.sigils) {
+        if (sigil.status !== 'complete' && sigil.status !== 'resting') continue
+        if (!best || sigil.overallIntegrity > best.integrity) {
+          best = { id: sigil.id, integrity: sigil.overallIntegrity }
+        }
+      }
+    }
+    return best?.id ?? null
   }
 
   private _injectStyles(): void {
