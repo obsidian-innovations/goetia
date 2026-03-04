@@ -30,6 +30,20 @@ const lifecycleManager = new SigilLifecycleManager()
 /** Hold window states for fully charged sigils, keyed by sigilId */
 const holdWindows = new Map<string, import('@engine/charging/HoldWindow').HoldWindowState>()
 
+/** Look up a sigil and its demon from the grimoire by sigilId. */
+function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Types').Sigil; demon: import('@engine/sigil/Types').Demon } | null {
+  const pages = useGrimoireStore.getState().pages
+  for (const page of pages) {
+    const sigil = page.sigils.find(s => s.id === sigilId)
+    if (sigil) {
+      try {
+        return { sigil, demon: getDemon(page.demonId) }
+      } catch { return null }
+    }
+  }
+  return null
+}
+
 async function init(): Promise<void> {
   // ── UI overlay first — visible even if PixiJS fails ─────────────────────
   const ui = new UIManager()
@@ -172,38 +186,20 @@ async function init(): Promise<void> {
     },
 
     onCastHex(targetLabel: string, sigilId: string) {
-      // Find the sigil and its demon from the grimoire
-      const pages = useGrimoireStore.getState().pages
-      for (const page of pages) {
-        const sigil = page.sigils.find(s => s.id === sigilId)
-        if (sigil) {
-          try {
-            const demon = getDemon(page.demonId)
-            const hex = usePvPStore.getState().castHex(targetLabel, sigil, demon)
-            networkService.sendHex(targetLabel, hex)
-            haptic('sigilSettle')
-            audioManager.play('sigilSettle')
-          } catch { /* demon not found */ }
-          break
-        }
-      }
+      const found = findSigilWithDemon(sigilId)
+      if (!found) return
+      const hex = usePvPStore.getState().castHex(targetLabel, found.sigil, found.demon)
+      networkService.sendHex(targetLabel, hex)
+      haptic('sigilSettle')
+      audioManager.play('sigilSettle')
     },
 
     onCastWard(sigilId: string) {
-      // Find the sigil and its demon from the grimoire
-      const pages = useGrimoireStore.getState().pages
-      for (const page of pages) {
-        const sigil = page.sigils.find(s => s.id === sigilId)
-        if (sigil) {
-          try {
-            const demon = getDemon(page.demonId)
-            usePvPStore.getState().castWard(sigil, demon)
-            haptic('sigilSettle')
-            audioManager.play('sigilSettle')
-          } catch { /* demon not found */ }
-          break
-        }
-      }
+      const found = findSigilWithDemon(sigilId)
+      if (!found) return
+      usePvPStore.getState().castWard(found.sigil, found.demon)
+      haptic('sigilSettle')
+      audioManager.play('sigilSettle')
     },
 
     onCreateCoven(name: string) {
@@ -274,10 +270,12 @@ async function init(): Promise<void> {
     ui.updateWorldState(nearbyThinPlaces, currentThinPlace, playerPosition, locationPermission)
 
     // Roll for an encounter when entering a new thin place
-    if (currentThinPlace && currentThinPlace.id !== _prevThinPlaceId) {
+    // Update _prevThinPlaceId BEFORE rollEncounter to prevent re-entrant subscribe loop
+    const enteredNewPlace = currentThinPlace && currentThinPlace.id !== _prevThinPlaceId
+    _prevThinPlaceId = currentThinPlace?.id ?? null
+    if (enteredNewPlace) {
       useWorldStore.getState().rollEncounter(currentThinPlace)
     }
-    _prevThinPlaceId = currentThinPlace?.id ?? null
 
     // Update distortion for active encounters
     const { activeEncounters } = worldState
@@ -292,6 +290,7 @@ async function init(): Promise<void> {
 
   // ── PvP store subscription ─────────────────────────────────────────────────
   let _prevClashResult: import('@engine/pvp/ClashResolver').ClashResult | null = null
+  let distortionTimer: ReturnType<typeof setTimeout> | null = null
   usePvPStore.subscribe((pvpState) => {
     ui.updatePvP(pvpState.activeHexes, pvpState.activeWards)
     ui.updateCoven(pvpState.covenState)
@@ -300,21 +299,23 @@ async function init(): Promise<void> {
 
       // Apply misfire effects when a new clash result arrives and defender won
       if (pvpState.lastClashResult !== _prevClashResult && pvpState.lastClashResult.winner === 'defender') {
-        // Find the attacker's sigil to compute misfire
-        const attackerHexes = pvpState.activeHexes
-        const lostHex = attackerHexes[attackerHexes.length - 1]
-        if (lostHex) {
-          const misfire = calculateMisfire(lostHex.sigil, pvpState.lastClashResult)
-          // Apply misfire corruption
+        // TODO: ClashResult doesn't carry a hex reference — use the first outgoing
+        // hex as a best-effort proxy. Proper fix requires adding hexId to ClashResult.
+        const outgoingHex = pvpState.activeHexes.find(h => h.type === 'hex')
+        if (outgoingHex) {
+          const misfire = calculateMisfire(outgoingHex.sigil, pvpState.lastClashResult)
           useCorruptionStore.getState().addCorruption({
             type: 'hex_rebound',
             amount: misfire.corruptionGain,
             timestamp: Date.now(),
           })
-          // Temporary canvas distortion from misfire
           if (misfire.effects.includes('canvas_distortion')) {
+            if (distortionTimer) clearTimeout(distortionTimer)
             ritualCanvas.setDistortionIntensity(misfire.severity * 0.5)
-            setTimeout(() => ritualCanvas.setDistortionIntensity(0), 5000)
+            distortionTimer = setTimeout(() => {
+              ritualCanvas.setDistortionIntensity(0)
+              distortionTimer = null
+            }, 5000)
           }
           haptic('misfire')
           audioManager.play('misfire')
@@ -348,11 +349,8 @@ async function init(): Promise<void> {
       // Gather bound demons from active charges
       const boundDemons: import('@engine/sigil/Types').Demon[] = []
       const charges = useChargingStore.getState().activeCharges
-      for (const [,] of charges) {
-        const dId = useCanvasStore.getState().currentDemonId
-        if (dId) {
-          try { boundDemons.push(getDemon(dId)) } catch { /* ignore */ }
-        }
+      for (const [, chargeState] of charges) {
+        try { boundDemons.push(getDemon(chargeState.demonId)) } catch { /* ignore */ }
       }
       const vessel = createVesselState('local', latLng, boundDemons, 0.5, Date.now())
       useCorruptionStore.getState().setVessel(vessel)
@@ -473,17 +471,16 @@ async function init(): Promise<void> {
 
     // ── Track bound demons for whisper personalisation ─────────────────────
     const boundNames: string[] = []
-    for (const [,] of charges) {
+    for (const [, chargeState] of charges) {
       try {
-        // The charging state tracks demonRank but not demonId directly;
-        // derive from canvas store if the charge is for the current demon
-        if (demonId) {
-          const demon = getDemon(demonId)
-          boundNames.push(demon.name)
-        }
+        boundNames.push(getDemon(chargeState.demonId).name)
       } catch { /* ignore */ }
     }
-    if (boundNames.length > 0) {
+    // Only update if the list actually changed to avoid triggering subscribers
+    const prevNames = useCorruptionStore.getState().boundDemonNames
+    const namesChanged = boundNames.length !== prevNames.length ||
+      boundNames.some((n, i) => n !== prevNames[i])
+    if (namesChanged) {
       useCorruptionStore.getState().setBoundDemonNames(boundNames)
     }
   }, 1000)

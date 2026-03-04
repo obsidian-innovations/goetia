@@ -12,7 +12,7 @@ import type { DemonRank } from '@engine/sigil/Types'
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function makeState(rank: DemonRank = 'Baron', startedAt = 0) {
-  const state = createChargingState('sigil-1', rank)
+  const state = createChargingState('sigil-1', 'test-demon', rank)
   return { ...state, startedAt, lastAttentionAt: startedAt }
 }
 
@@ -59,13 +59,14 @@ describe('getRequiredChargeTime', () => {
 
 describe('createChargingState', () => {
   it('starts at 0 progress', () => {
-    const state = createChargingState('s1', 'Baron')
+    const state = createChargingState('s1', 'demon-1', 'Baron')
     expect(state.chargeProgress).toBe(0)
   })
 
-  it('records sigilId and rank', () => {
-    const state = createChargingState('my-sigil', 'King')
+  it('records sigilId, demonId, and rank', () => {
+    const state = createChargingState('my-sigil', 'paimon', 'King')
     expect(state.sigilId).toBe('my-sigil')
+    expect(state.demonId).toBe('paimon')
     expect(state.demonRank).toBe('King')
   })
 })

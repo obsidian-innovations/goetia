@@ -1568,10 +1568,11 @@ export class UIManager {
     hexBtn.style.cssText = 'flex:1;padding:0.5rem;border:1px solid #993333;background:#1a0808;color:#cc6666;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;'
     hexBtn.textContent = 'Cast Hex'
     hexBtn.addEventListener('click', () => {
+      const sigilId = this._findBestSigilId()
+      if (!sigilId) return
       const target = prompt('Enter target player ID:')
       if (target) {
-        // Find the best available sigil
-        this._callbacks?.onCastHex?.(target, this._findBestSigilId() ?? '')
+        this._callbacks?.onCastHex?.(target, sigilId)
       }
     })
     actionsRow.appendChild(hexBtn)

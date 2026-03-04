@@ -51,7 +51,7 @@ export const useChargingStore = createStore<ChargingStore>((set, get) => ({
   startCharging(sigil: Sigil, demon: Demon) {
     set(state => {
       const charges = new Map(state.activeCharges)
-      charges.set(sigil.id, createChargingState(sigil.id, demon.rank))
+      charges.set(sigil.id, createChargingState(sigil.id, demon.id, demon.rank))
       return { activeCharges: charges }
     })
   },
