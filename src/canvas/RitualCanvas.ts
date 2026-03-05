@@ -149,11 +149,6 @@ export class RitualCanvas {
     this._glyphRecognizer.setDifficulty(difficulty)
   }
 
-  /** Show or hide the atmospheric background layer (for camera-through mode). */
-  setAtmosphericVisible(visible: boolean): void {
-    this._atmospheric.visible = visible
-  }
-
   /** Set the PvE encounter interference intensity (0 = none, 1 = maximum). */
   setDistortionIntensity(intensity: number): void {
     this._distortionLayer.setIntensity(intensity)
