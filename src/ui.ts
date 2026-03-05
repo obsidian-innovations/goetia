@@ -92,6 +92,8 @@ const STYLE = `
     border-radius: 2px; transition: width 0.5s ease;
   }
   .demon-card .d-hint { font-size: 0.6rem; color: #554466; margin-top: 0.1rem; font-style: italic; }
+  #demon-bottom-menu::-webkit-scrollbar { display: none; }
+  #demon-bottom-menu button { flex-shrink: 0; }
   #records-btn {
     margin: 0.75rem auto; padding: 0.5rem 2rem;
     background: transparent; border: 1px solid #442255;
@@ -123,15 +125,16 @@ const STYLE = `
   #camera-btn:hover { border-color: #44aa77; color: #99ddbb; }
   #demon-name-label { text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; }
   #ritual-toolbar {
-    padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center;
+    padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: safe center; align-items: center;
     background: linear-gradient(to top, rgba(8,7,15,0.85) 0%, transparent 100%);
-    pointer-events: all;
+    pointer-events: all; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
+  #ritual-toolbar::-webkit-scrollbar { display: none; }
   .phase-btn {
     padding: 0.45rem 1.1rem; border: 1px solid #442255; background: rgba(30,10,50,0.7);
     color: #997799; border-radius: 4px; cursor: pointer;
     font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
-    transition: all 0.2s;
+    transition: all 0.2s; flex-shrink: 0;
   }
   .phase-btn.active { border-color: #aa66ff; background: rgba(80,20,130,0.7); color: #ddb8ff; }
   .phase-btn:hover:not(.active) { border-color: #7733aa; color: #cc88ff; }
@@ -1204,8 +1207,8 @@ export class UIManager {
     const grid = el('div', '', 'demon-grid')
     screen.appendChild(grid)
 
-    const btnRow = el('div')
-    btnRow.style.cssText = 'display:flex;justify-content:center;gap:0.5rem;margin:0.75rem 0'
+    const btnRow = el('div', '', 'demon-bottom-menu')
+    btnRow.style.cssText = 'display:flex;gap:0.5rem;margin:0.75rem 0;overflow-x:auto;padding:0 0.75rem;-webkit-overflow-scrolling:touch;scrollbar-width:none;justify-content:safe center'
 
     const recordsBtn = el('button', '', 'records-btn')
     recordsBtn.style.margin = '0'
