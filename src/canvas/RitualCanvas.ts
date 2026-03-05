@@ -157,17 +157,15 @@ export class RitualCanvas {
     this._distortionLayer.setIntensity(intensity)
   }
 
-  /** Enter camera mode: hide opaque background, make WebGL canvas transparent. */
+  /** Enter camera mode: hide opaque atmospheric background so camera video shows through. */
   enterCameraMode(): void {
     this._atmospheric.visible = false
-    this._app.renderer.background.alpha = 0
     this._cameraMode = true
   }
 
-  /** Exit camera mode: restore opaque background. */
+  /** Exit camera mode: restore opaque atmospheric background. */
   exitCameraMode(): void {
     this._atmospheric.visible = true
-    this._app.renderer.background.alpha = 1
     this._cameraMode = false
   }
 
