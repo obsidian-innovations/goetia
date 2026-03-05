@@ -1,4 +1,4 @@
-import { listDemons } from '@engine/demons/DemonRegistry'
+import { getDemon, listDemons } from '@engine/demons/DemonRegistry'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
@@ -6,7 +6,7 @@ import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
 import type { DrawingPhase } from '@stores/canvasStore'
-import type { Demon, GlyphDifficulty, Sigil, SigilVisualState } from '@engine/sigil/Types'
+import type { Demon, GlyphDifficulty, SealGeometry, Sigil, SigilVisualState } from '@engine/sigil/Types'
 import type { AttentionGesture } from '@engine/charging/AttentionGesture'
 import type { DemonicDemand } from '@engine/demands/DemandEngine'
 import type { ResearchState } from '@engine/research/ResearchEngine'
@@ -777,6 +777,9 @@ export class UIManager {
       this._cameraDrawCtx.lineCap = 'round'
       this._cameraDrawCtx.lineJoin = 'round'
     }
+
+    // Draw the current demon's seal nodes + ghost edges
+    this._drawSealOnCamera()
 
     // Start camera
     const stream = await startCamera('environment')
@@ -2137,6 +2140,87 @@ export class UIManager {
     if (canvas && this._cameraDrawCtx) {
       this._cameraDrawCtx.clearRect(0, 0, canvas.width, canvas.height)
     }
+    // Redraw the seal so it stays visible after clearing user strokes
+    this._drawSealOnCamera()
+  }
+
+  /**
+   * Draw the current demon's seal geometry (ghost edges + nodes)
+   * on the camera screen's 2D canvas so the player can trace over it.
+   */
+  private _drawSealOnCamera(): void {
+    const ctx = this._cameraDrawCtx
+    if (!ctx) return
+
+    const demonId = useCanvasStore.getState().currentDemonId
+    if (!demonId) return
+
+    let geometry: SealGeometry
+    try {
+      geometry = getDemon(demonId).sealGeometry
+    } catch {
+      return
+    }
+
+    const canvas = this._root.querySelector<HTMLCanvasElement>('#camera-draw-canvas')
+    if (!canvas) return
+
+    // Logical dimensions (before devicePixelRatio scaling)
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
+
+    // Same padding as SealLayer to keep nodes away from header/toolbar
+    const PAD_TOP = 56
+    const PAD_BOT = 72
+
+    const toPixel = (p: { x: number; y: number }) => ({
+      x: p.x * w,
+      y: PAD_TOP + p.y * (h - PAD_TOP - PAD_BOT),
+    })
+
+    ctx.save()
+
+    // ── Ghost edges ──
+    ctx.strokeStyle = '#6633aa'
+    ctx.lineWidth = 1.5
+    ctx.globalAlpha = 0.55
+    ctx.shadowColor = '#6633aa'
+    ctx.shadowBlur = 4
+
+    for (const edge of geometry.edges) {
+      const path = edge.canonicalPath
+      if (path.length < 2) continue
+      const first = toPixel(path[0])
+      ctx.beginPath()
+      ctx.moveTo(first.x, first.y)
+      for (let i = 1; i < path.length; i++) {
+        const p = toPixel(path[i])
+        ctx.lineTo(p.x, p.y)
+      }
+      ctx.stroke()
+    }
+
+    // ── Nodes ──
+    ctx.globalAlpha = 0.6
+    ctx.shadowBlur = 6
+    ctx.shadowColor = '#7755bb'
+
+    for (const node of geometry.nodes) {
+      const { x, y } = toPixel(node.position)
+      ctx.beginPath()
+      ctx.arc(x, y, 5, 0, Math.PI * 2)
+      ctx.fillStyle = '#7755bb'
+      ctx.fill()
+      // Bright centre dot
+      ctx.beginPath()
+      ctx.arc(x, y, 2, 0, Math.PI * 2)
+      ctx.fillStyle = '#bb88ee'
+      ctx.globalAlpha = 0.9
+      ctx.fill()
+      ctx.globalAlpha = 0.6
+    }
+
+    ctx.restore()
   }
 
   private _buildCorruptionOverlays(): void {
