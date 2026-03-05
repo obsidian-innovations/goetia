@@ -4,6 +4,8 @@ import { SealLayer } from './SealLayer'
 import { GlyphLayer } from './GlyphLayer'
 import { BindingRingLayer } from './BindingRingLayer'
 import { DistortionLayer } from './DistortionLayer'
+import { ChargingOverlayLayer } from './ChargingOverlayLayer'
+import { CorruptionEffects } from './CorruptionEffects'
 import { StrokeEvaluator } from '@engine/sigil/StrokeEvaluator'
 import { SealReconstructor } from '@engine/sigil/SealReconstructor'
 import { GlyphRecognizer } from '@engine/sigil/GlyphRecognizer'
@@ -54,6 +56,8 @@ export class RitualCanvas {
   private readonly _glyphLayer: GlyphLayer
   private readonly _ringLayer: BindingRingLayer
   private readonly _distortionLayer: DistortionLayer
+  private readonly _chargingOverlay: ChargingOverlayLayer
+  private readonly _corruptionEffects: CorruptionEffects
 
   // Engine evaluators (stateless or long-lived)
   private readonly _evaluator = new StrokeEvaluator()
@@ -85,12 +89,17 @@ export class RitualCanvas {
     this._glyphLayer = new GlyphLayer(w, h)
     this._ringLayer = new BindingRingLayer(w, h)
     this._distortionLayer = new DistortionLayer(w, h)
+    this._chargingOverlay = new ChargingOverlayLayer(w, h)
+    this._chargingOverlay.visible = false
+    this._corruptionEffects = new CorruptionEffects(w, h)
 
     app.stage.addChild(this._atmospheric)
     app.stage.addChild(this._sealLayer)
     app.stage.addChild(this._glyphLayer)
     app.stage.addChild(this._ringLayer)
     app.stage.addChild(this._distortionLayer)
+    app.stage.addChild(this._chargingOverlay)
+    app.stage.addChild(this._corruptionEffects)
 
     this._bindEvents()
   }
@@ -157,6 +166,26 @@ export class RitualCanvas {
     this._distortionLayer.setIntensity(intensity)
   }
 
+  /** Show or hide the charging overlay. */
+  setChargingVisible(visible: boolean): void {
+    this._chargingOverlay.visible = visible
+  }
+
+  /** Update charging progress on the overlay (0–1). */
+  setChargeProgress(progress: number): void {
+    this._chargingOverlay.setChargeProgress(progress)
+  }
+
+  /** Set whether the charging overlay shows decay flicker. */
+  setChargingDecay(decaying: boolean): void {
+    this._chargingOverlay.setDecaying(decaying)
+  }
+
+  /** Update the corruption visual effects level (0–1). */
+  setCorruptionLevel(level: number): void {
+    this._corruptionEffects.setLevel(level)
+  }
+
   /** Enter camera mode: hide opaque atmospheric background so camera video shows through. */
   enterCameraMode(): void {
     this._atmospheric.visible = false
@@ -179,6 +208,8 @@ export class RitualCanvas {
     this._glyphLayer.resize(width, height)
     this._ringLayer.resize(width, height)
     this._distortionLayer.resize(width, height)
+    this._chargingOverlay.resize(width, height)
+    this._corruptionEffects.resize(width, height)
   }
 
   destroy(): void {
@@ -187,6 +218,9 @@ export class RitualCanvas {
     this._sealLayer.destroy()
     this._glyphLayer.destroy()
     this._ringLayer.destroy()
+    this._distortionLayer.destroy()
+    this._chargingOverlay.destroy()
+    this._corruptionEffects.destroy()
   }
 
   // ─── Event binding ───────────────────────────────────────────────────────

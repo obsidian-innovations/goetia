@@ -24,6 +24,7 @@ import { calculateMisfire } from '@engine/pvp/MisfireEngine'
 import { createHoldWindowState, isCollapsed } from '@engine/charging/HoldWindow'
 import { createVesselState } from '@engine/corruption/VesselState'
 import { attemptPurification } from '@engine/corruption/PurificationEngine'
+import { getBestSigil } from '@engine/grimoire'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -223,14 +224,8 @@ async function init(): Promise<void> {
 
       // Use the best available sigil's integrity for the purification attempt
       const pages = useGrimoireStore.getState().pages
-      let bestIntegrity = 0
-      for (const page of pages) {
-        for (const sigil of page.sigils) {
-          if (sigil.overallIntegrity > bestIntegrity) {
-            bestIntegrity = sigil.overallIntegrity
-          }
-        }
-      }
+      const best = getBestSigil(pages)
+      const bestIntegrity = best?.overallIntegrity ?? 0
 
       const result = attemptPurification(
         { purifierId: 'local', targetVesselId: vessel.playerId, sealIntegrity: bestIntegrity },
@@ -342,6 +337,7 @@ async function init(): Promise<void> {
   useCorruptionStore.subscribe((corruptionState) => {
     const { level, stage } = corruptionState.corruption
     ui.updateCorruption(level, stage)
+    ritualCanvas.setCorruptionLevel(level)
 
     // Show whisper if one is queued
     if (corruptionState.pendingWhisper) {
@@ -446,6 +442,11 @@ async function init(): Promise<void> {
       for (const [, chargeState] of charges) {
         ui.updateChargingProgress(chargeState.chargeProgress)
 
+        // Drive the charging canvas overlay
+        ritualCanvas.setChargingVisible(true)
+        ritualCanvas.setChargeProgress(chargeState.chargeProgress)
+        ritualCanvas.setChargingDecay(now - chargeState.lastAttentionAt > 60_000)
+
         // Update attention gesture hint
         const gesture = getNextGesture(chargeState, demonId)
         ui.updateAttentionGesture(gesture)
@@ -463,6 +464,7 @@ async function init(): Promise<void> {
             }
           }
           useChargingStore.getState().stopCharging(chargeState.sigilId)
+          ritualCanvas.setChargingVisible(false)
         }
         break
       }

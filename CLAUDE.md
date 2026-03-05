@@ -106,7 +106,7 @@ engine  →  canvas  →  stores  →  services
 
 **`SigilLifecycle`** — `SigilLifecycleManager` manages sigil status transitions (draft → complete → resting → awakened → charged → spent) with validation. Throws on invalid transitions.
 
-**`DemonRegistry`** (`src/engine/demons/DemonRegistry.ts`) — `DEMON_REGISTRY` with 80 demons across 8 rank files (kings, dukes, princes, marquises, earls, presidents, knights, barons). Shared seal geometry helpers in `geometry.ts` (`nid`, `mkEdge`, `circle`, `hub`, `pentagram`, `wheel`). `getDemon(id)` throws `DemonNotFoundError` for unknown IDs. Edge weights per demon sum to ~1.0.
+**`DemonRegistry`** (`src/engine/demons/DemonRegistry.ts`) — `DEMON_REGISTRY` with 72 demons across 8 rank files (kings, dukes, princes, marquises, earls, presidents, knights, barons). Shared seal geometry helpers in `geometry.ts` (`nid`, `mkEdge`, `circle`, `hub`, `pentagram`, `wheel`). `getDemon(id)` throws `DemonNotFoundError` for unknown IDs. Edge weights per demon sum to ~1.0.
 
 ---
 
