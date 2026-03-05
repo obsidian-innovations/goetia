@@ -752,6 +752,7 @@ export class UIManager {
 
     const stream = await startCamera('environment')
     if (!stream) {
+      console.warn('[Goetia] Camera unavailable — check permissions or HTTPS')
       // Brief visual feedback — flash the CAM button red
       const camBtn = this._root.querySelector<HTMLElement>('#camera-btn')
       if (camBtn) {
@@ -768,6 +769,14 @@ export class UIManager {
     this._cameraStream = stream
     this._cameraVideo.srcObject = stream
     this._cameraVideo.style.display = 'block'
+
+    // Explicitly play — autoplay may be blocked on some browsers
+    try {
+      await this._cameraVideo.play()
+    } catch {
+      // play() can reject if paused immediately; video will still autoplay
+    }
+
     this._isCameraRitual = true
 
     // Update CAM button state

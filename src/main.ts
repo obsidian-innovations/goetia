@@ -61,6 +61,7 @@ async function init(): Promise<void> {
 
   await app.init({
     background: 0x08070f,
+    backgroundAlpha: 0,
     resizeTo: window,
     resolution: window.devicePixelRatio || 1,
     autoDensity: true,
