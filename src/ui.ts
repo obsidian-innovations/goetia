@@ -49,7 +49,7 @@ const VISUAL_STATE_COLORS: Record<SigilVisualState, string> = {
 
 const STYLE = `
   #goetia-ui {
-    position: fixed; inset: 0;
+    position: fixed; inset: 0; z-index: 10;
     pointer-events: none;
     font-family: 'Georgia', serif;
     color: #ddd;
