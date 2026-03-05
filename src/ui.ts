@@ -32,6 +32,7 @@ export interface UICallbacks {
   onCreateCoven?: (name: string) => void
   onDifficultyChange?: (difficulty: GlyphDifficulty) => void
   onAttemptPurification?: () => void
+  onCameraToggle?: () => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -111,7 +112,15 @@ const STYLE = `
     font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
   }
   #back-btn:hover { border-color: #7733aa; color: #cc88ff; }
-  #demon-name-label { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; }
+  #camera-btn {
+    background: transparent; border: 1px solid #225544; color: #77bb99;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+  }
+  #camera-btn:hover { border-color: #44aa77; color: #99ddbb; }
+  #camera-btn.active { border-color: #44cc88; background: rgba(20,60,40,0.8); color: #aaffcc; }
+  #demon-name-label { text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; }
   #ritual-toolbar {
     padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center;
     background: linear-gradient(to top, rgba(8,7,15,0.85) 0%, transparent 100%);
@@ -1065,6 +1074,25 @@ export class UIManager {
     }, 4_000)
   }
 
+  /** Update the camera button to reflect on/off state. */
+  updateCameraState(active: boolean): void {
+    const btn = document.getElementById('camera-btn')
+    if (btn) btn.classList.toggle('active', active)
+  }
+
+  /** Flash a brief error when camera access fails. */
+  showCameraError(): void {
+    const overlay = this._whisperOverlay
+    if (!overlay) return
+    overlay.textContent = 'Camera unavailable'
+    overlay.className = 'whisper-overlay visible low'
+    if (this._whisperTimeout !== null) clearTimeout(this._whisperTimeout)
+    this._whisperTimeout = window.setTimeout(() => {
+      overlay.classList.remove('visible')
+      this._whisperTimeout = null
+    }, 3000)
+  }
+
   /** Show the full-screen vessel warning. */
   showVesselWarning(): void {
     this._vesselWarning?.classList.add('visible')
@@ -1213,6 +1241,16 @@ export class UIManager {
 
     const nameLabel = el('div', '', 'demon-name-label')
     header.appendChild(nameLabel)
+
+    // Spacer to push camera button to the right
+    const headerSpacer = el('div')
+    headerSpacer.style.flex = '1'
+    header.appendChild(headerSpacer)
+
+    const camBtn = el('button', '', 'camera-btn')
+    camBtn.textContent = 'CAM'
+    camBtn.addEventListener('click', () => this._callbacks?.onCameraToggle?.())
+    header.appendChild(camBtn)
 
     screen.appendChild(header)
 
