@@ -24,6 +24,7 @@ import { calculateMisfire } from '@engine/pvp/MisfireEngine'
 import { createHoldWindowState, isCollapsed } from '@engine/charging/HoldWindow'
 import { createVesselState } from '@engine/corruption/VesselState'
 import { attemptPurification } from '@engine/corruption/PurificationEngine'
+import { startCamera, stopCamera } from './services/camera'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -72,6 +73,21 @@ async function init(): Promise<void> {
   if (container) {
     container.appendChild(app.canvas)
   }
+
+  // ── Camera video element (hidden by default, behind canvas) ────────────
+  const videoEl = document.createElement('video')
+  videoEl.id = 'camera-feed'
+  videoEl.autoplay = true
+  videoEl.playsInline = true
+  videoEl.muted = true
+  videoEl.style.cssText =
+    'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;display:none;'
+  if (container) {
+    container.insertBefore(videoEl, app.canvas)
+    ;(app.canvas as HTMLCanvasElement).style.position = 'relative'
+    ;(app.canvas as HTMLCanvasElement).style.zIndex = '1'
+  }
+  let cameraStream: MediaStream | null = null
 
   // ── Core objects ──────────────────────────────────────────────────────────
   const ritualCanvas = new RitualCanvas(app)
@@ -205,6 +221,31 @@ async function init(): Promise<void> {
     onCreateCoven(name: string) {
       usePvPStore.getState().createCoven(name)
       ui.updateCoven(usePvPStore.getState().covenState)
+    },
+
+    async onCameraToggle() {
+      if (cameraStream) {
+        stopCamera(cameraStream)
+        cameraStream = null
+        videoEl.srcObject = null
+        videoEl.style.display = 'none'
+        app.renderer.background.color = 0x08070f
+        app.renderer.background.alpha = 1
+        ritualCanvas.setAtmosphericVisible(true)
+        ui.updateCameraState(false)
+      } else {
+        const stream = await startCamera('environment')
+        if (!stream) {
+          ui.showCameraError()
+          return
+        }
+        cameraStream = stream
+        videoEl.srcObject = stream
+        videoEl.style.display = 'block'
+        app.renderer.background.alpha = 0
+        ritualCanvas.setAtmosphericVisible(false)
+        ui.updateCameraState(true)
+      }
     },
 
     onAttemptPurification() {
@@ -493,6 +534,14 @@ async function init(): Promise<void> {
   // ── Resize handler ────────────────────────────────────────────────────────
   window.addEventListener('resize', () => {
     ritualCanvas.resize(app.screen.width, app.screen.height)
+  })
+
+  // ── Camera cleanup on page unload ──────────────────────────────────────
+  window.addEventListener('beforeunload', () => {
+    if (cameraStream) {
+      stopCamera(cameraStream)
+      cameraStream = null
+    }
   })
 }
 
