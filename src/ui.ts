@@ -525,6 +525,86 @@ const STYLE = `
   }
   #coven-btn:hover { border-color: #4466aa; color: #88bbff; }
 
+  /* ── Ritual Stats Panel ── */
+  #ritual-stats {
+    display: none; pointer-events: none;
+    position: absolute; top: 3.2rem; right: 0.75rem;
+    background: rgba(8,7,15,0.85); border: 1px solid #331144; border-radius: 6px;
+    padding: 0.5rem 0.65rem; min-width: 140px;
+    display: flex; flex-direction: column; gap: 0.35rem;
+  }
+  #screen-ritual.active #ritual-stats { display: flex; }
+  .rs-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+  }
+  .rs-label {
+    font-size: 0.6rem; color: #776688; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .rs-value {
+    font-size: 0.7rem; color: #bb88ee; font-weight: bold; letter-spacing: 0.04em;
+  }
+  .rs-bar-bg {
+    height: 3px; flex: 1; background: rgba(60,20,90,0.4); border-radius: 2px; overflow: hidden;
+    min-width: 50px;
+  }
+  .rs-bar {
+    height: 100%; border-radius: 2px; transition: width 0.3s ease, background 0.3s ease;
+    width: 0%;
+  }
+  .rs-bar.high   { background: linear-gradient(to right, #7722bb, #cc88ff); }
+  .rs-bar.medium { background: linear-gradient(to right, #886622, #ffaa44); }
+  .rs-bar.low    { background: linear-gradient(to right, #882222, #ff4444); }
+  .rs-bar.none   { background: #333; }
+
+  /* ── Gameplay Info Screen ── */
+  #screen-info { background: rgba(8,7,15,0.95); pointer-events: all; }
+  #info-header {
+    padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem;
+    border-bottom: 1px solid #221133;
+  }
+  #info-header h2 { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.15em; font-size: 1.1rem; margin: 0; }
+  #info-back {
+    background: transparent; border: 1px solid #442255; color: #997799;
+    border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #info-back:hover { border-color: #7733aa; color: #cc88ff; }
+  #info-content {
+    flex: 1; overflow-y: auto; padding: 0.75rem 1rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .info-section {
+    background: rgba(30,10,50,0.5); border: 1px solid #2a0a40; border-radius: 8px;
+    padding: 0.75rem;
+  }
+  .info-section h3 {
+    font-size: 0.75rem; color: #aa77cc; text-transform: uppercase; letter-spacing: 0.12em;
+    margin: 0 0 0.5rem; border-bottom: 1px solid #221133; padding-bottom: 0.35rem;
+  }
+  .info-section p {
+    font-size: 0.78rem; color: #9988aa; line-height: 1.55; margin: 0 0 0.4rem;
+  }
+  .info-section p:last-child { margin-bottom: 0; }
+  .info-phase-tag {
+    display: inline-block; padding: 0.15rem 0.4rem; border-radius: 3px;
+    font-size: 0.6rem; font-weight: bold; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-right: 0.3rem;
+    background: rgba(80,20,130,0.5); border: 1px solid #553377; color: #cc88ff;
+  }
+  .info-formula {
+    font-family: 'Courier New', monospace; font-size: 0.7rem; color: #aa88cc;
+    background: rgba(15,5,25,0.8); border: 1px solid #221133; border-radius: 4px;
+    padding: 0.4rem 0.6rem; margin: 0.4rem 0;
+  }
+  #info-btn {
+    margin: 0; padding: 0.5rem 1.2rem;
+    background: transparent; border: 1px solid #331144;
+    color: #776688; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
+    font-family: inherit; font-size: 0.85rem; text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  #info-btn:hover { border-color: #7733aa; color: #cc88ff; }
+
   /* ── Corruption bar ── */
   #corruption-bar-wrap {
     position: fixed; bottom: 0; left: 0; right: 0;
@@ -857,6 +937,10 @@ export class UIManager {
     this._show('coven')
   }
 
+  showGameplayInfo(): void {
+    this._show('info')
+  }
+
   /** Refresh the coven screen. Pass null when not in a coven. */
   updateCoven(covenState: CovenState | null): void {
     const nameEl    = this._root.querySelector<HTMLElement>('#coven-name')
@@ -1005,6 +1089,7 @@ export class UIManager {
     this._screens.clash = this._buildClash()
     this._screens.pvp = this._buildPvP()
     this._screens.coven = this._buildCoven()
+    this._screens.info = this._buildGameplayInfo()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -1043,6 +1128,11 @@ export class UIManager {
     covenBtn.textContent = 'Coven'
     covenBtn.addEventListener('click', () => this.showCoven())
     btnRow.appendChild(covenBtn)
+
+    const infoBtn = el('button', '', 'info-btn')
+    infoBtn.textContent = 'Info'
+    infoBtn.addEventListener('click', () => this.showGameplayInfo())
+    btnRow.appendChild(infoBtn)
 
     screen.appendChild(btnRow)
 
@@ -1125,6 +1215,9 @@ export class UIManager {
     header.appendChild(nameLabel)
 
     screen.appendChild(header)
+
+    // Real-time ritual stats panel (top-right overlay)
+    screen.appendChild(this._buildRitualStats())
 
     // Spacer
     const spacer = el('div')
@@ -1259,6 +1352,86 @@ export class UIManager {
     }
 
     return panel
+  }
+
+  private _buildRitualStats(): HTMLDivElement {
+    const panel = el('div', '', 'ritual-stats')
+    panel.style.position = 'absolute'
+
+    const rows: { id: string; label: string }[] = [
+      { id: 'seal', label: 'Seal' },
+      { id: 'glyphs', label: 'Glyphs' },
+      { id: 'coherence', label: 'Coherence' },
+      { id: 'ring', label: 'Ring' },
+    ]
+
+    for (const { id, label } of rows) {
+      const row = el('div', 'rs-row')
+
+      const labelEl = el('span', 'rs-label')
+      labelEl.textContent = label
+      row.appendChild(labelEl)
+
+      const barBg = el('div', 'rs-bar-bg')
+      const bar = el('div', 'rs-bar none', `rs-bar-${id}`)
+      barBg.appendChild(bar)
+      row.appendChild(barBg)
+
+      const value = el('span', 'rs-value', `rs-val-${id}`)
+      value.textContent = '—'
+      row.appendChild(value)
+
+      panel.appendChild(row)
+    }
+
+    return panel
+  }
+
+  /** Update real-time ritual stats from canvasStore state. */
+  updateRitualStats(): void {
+    const s = useCanvasStore.getState()
+
+    // Seal integrity
+    this._setStatBar('seal', s.sealIntegrity)
+
+    // Glyph count
+    const glyphCount = s.placedGlyphs.length
+    const glyphVal = this._root.querySelector<HTMLElement>('#rs-val-glyphs')
+    const glyphBar = this._root.querySelector<HTMLElement>('#rs-bar-glyphs')
+    if (glyphVal) glyphVal.textContent = glyphCount > 0 ? String(glyphCount) : '—'
+    if (glyphBar) {
+      const pct = Math.min(glyphCount / 3, 1) // 3 glyphs = full
+      glyphBar.style.width = `${Math.round(pct * 100)}%`
+      glyphBar.className = `rs-bar ${pct >= 0.66 ? 'high' : pct > 0 ? 'medium' : 'none'}`
+    }
+
+    // Coherence
+    const coherence = s.coherenceResult?.score ?? 0
+    const hasCoherence = s.coherenceResult !== null
+    this._setStatBar('coherence', hasCoherence ? coherence : -1)
+
+    // Ring
+    const ring = s.ringResult?.overallStrength ?? 0
+    const hasRing = s.ringResult !== null
+    this._setStatBar('ring', hasRing ? ring : -1)
+  }
+
+  private _setStatBar(id: string, value: number): void {
+    const bar = this._root.querySelector<HTMLElement>(`#rs-bar-${id}`)
+    const val = this._root.querySelector<HTMLElement>(`#rs-val-${id}`)
+    if (!bar || !val) return
+
+    if (value < 0) {
+      bar.style.width = '0%'
+      bar.className = 'rs-bar none'
+      val.textContent = '—'
+      return
+    }
+
+    const pct = Math.round(value * 100)
+    bar.style.width = `${pct}%`
+    bar.className = `rs-bar ${value >= 0.6 ? 'high' : value >= 0.3 ? 'medium' : 'low'}`
+    val.textContent = `${pct}%`
   }
 
   private _buildGrimoire(): HTMLDivElement {
@@ -1677,6 +1850,80 @@ export class UIManager {
     return screen
   }
 
+  private _buildGameplayInfo(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-info')
+
+    const header = el('div', '', 'info-header')
+    const backBtn = el('button', '', 'info-back')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => this.showDemonSelect())
+    const h2 = el('h2')
+    h2.textContent = 'How to Play'
+    header.appendChild(backBtn)
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    const content = el('div', '', 'info-content')
+
+    // Overview section
+    const overview = el('div', 'info-section')
+    overview.innerHTML = `
+      <h3>The Ritual</h3>
+      <p>Craft sigils to summon and bind demons from the Ars Goetia. Each ritual has three phases that must be completed in order to create a powerful sigil.</p>
+    `
+    content.appendChild(overview)
+
+    // Phase 1: Seal
+    const sealSection = el('div', 'info-section')
+    sealSection.innerHTML = `
+      <h3><span class="info-phase-tag">1</span> Foundation Seal</h3>
+      <p>Trace the demon's geometric seal by connecting its nodes. Press on a node, draw to another node, and release. The closer your stroke matches the canonical edge path, the higher your accuracy.</p>
+      <p>Each edge is scored independently. Connect all edges for maximum seal integrity.</p>
+    `
+    content.appendChild(sealSection)
+
+    // Phase 2: Glyph
+    const glyphSection = el('div', 'info-section')
+    glyphSection.innerHTML = `
+      <h3><span class="info-phase-tag">2</span> Intent Glyphs</h3>
+      <p>Draw symbolic glyphs to declare your intent. Open the glyph reference panel to see available symbols and practice their shapes.</p>
+      <p>Glyphs come in four groups: <strong>Vector</strong> (direction), <strong>Quality</strong> (nature), <strong>Target</strong> (focus), and <strong>Duration</strong> (time). Choose glyphs that work together — contradictory intents reduce coherence.</p>
+    `
+    content.appendChild(glyphSection)
+
+    // Phase 3: Ring
+    const ringSection = el('div', 'info-section')
+    ringSection.innerHTML = `
+      <h3><span class="info-phase-tag">3</span> Binding Ring</h3>
+      <p>Close the ritual by drawing a circle around the seal. A steady, round circle produces a strong binding. Weak points in the ring will be highlighted.</p>
+      <p>Ring strength is based on circularity (40%), closure (35%), and consistency (25%).</p>
+    `
+    content.appendChild(ringSection)
+
+    // Scoring
+    const scoring = el('div', 'info-section')
+    scoring.innerHTML = `
+      <h3>Sigil Integrity</h3>
+      <p>Your final sigil is scored from three components:</p>
+      <div class="info-formula">Integrity = Seal × 0.40 + Coherence × 0.35 + Ring × 0.25</div>
+      <p><strong>Charged</strong> (≥85%) — Exceptional power. <strong>Healthy</strong> (≥60%) — Solid binding. <strong>Unstable</strong> (≥30%) — Risky but functional. <strong>Corrupted</strong> (&lt;30%) — Dangerously weak.</p>
+    `
+    content.appendChild(scoring)
+
+    // Tips
+    const tips = el('div', 'info-section')
+    tips.innerHTML = `
+      <h3>Tips</h3>
+      <p>Draw slowly and deliberately — accuracy matters more than speed.</p>
+      <p>Study completed sigils in the Grimoire to deepen your research on each demon, revealing more of their seal geometry.</p>
+      <p>After binding, your sigil enters a charging phase. Pay attention to demonic demands to maintain charge quality.</p>
+    `
+    content.appendChild(tips)
+
+    screen.appendChild(content)
+    return screen
+  }
+
   private _buildCorruptionOverlays(): void {
     // Corruption bar (fixed at bottom of viewport)
     const barWrap = document.createElement('div')
@@ -1944,6 +2191,7 @@ export class UIManager {
         s.sealIntegrity > 0 && s.placedGlyphs.length > 0 && s.ringResult !== null
       const bindBtn = this._root.querySelector<HTMLElement>('#bind-btn')
       if (bindBtn) bindBtn.classList.toggle('visible', canBind)
+      this.updateRitualStats()
     }
 
     this._unsubscribeStore = useCanvasStore.subscribe(check)
