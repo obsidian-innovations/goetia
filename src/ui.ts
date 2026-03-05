@@ -99,7 +99,7 @@ const STYLE = `
   #records-btn:hover { border-color: #8844aa; color: #cc88ff; }
 
   /* ── Ritual Canvas overlay ── */
-  #screen-ritual { pointer-events: none; justify-content: space-between; }
+  #screen-ritual { pointer-events: none; justify-content: space-between; position: relative; }
   #ritual-header {
     padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem;
     background: linear-gradient(to bottom, rgba(8,7,15,0.8) 0%, transparent 100%);
@@ -531,9 +531,9 @@ const STYLE = `
     position: absolute; top: 3.2rem; right: 0.75rem;
     background: rgba(8,7,15,0.85); border: 1px solid #331144; border-radius: 6px;
     padding: 0.5rem 0.65rem; min-width: 140px;
-    display: flex; flex-direction: column; gap: 0.35rem;
+    flex-direction: column; gap: 0.35rem;
   }
-  #screen-ritual.active #ritual-stats { display: flex; }
+  .screen.active #ritual-stats { display: flex; }
   .rs-row {
     display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
   }
