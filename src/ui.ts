@@ -15,6 +15,7 @@ import { bearingDeg, compassLabel } from '@engine/world/ThinPlaces'
 import type { ClashResult } from '@engine/pvp/ClashResolver'
 import type { Hex } from '@engine/pvp/HexSystem'
 import type { CovenState } from '@engine/social/CovenEngine'
+import { startCamera, stopCamera } from '@services/camera'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -119,7 +120,6 @@ const STYLE = `
     transition: border-color 0.2s, color 0.2s, background 0.2s;
   }
   #camera-btn:hover { border-color: #44aa77; color: #99ddbb; }
-  #camera-btn.active { border-color: #44cc88; background: rgba(20,60,40,0.8); color: #aaffcc; }
   #demon-name-label { text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; }
   #ritual-toolbar {
     padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center;
@@ -614,6 +614,41 @@ const STYLE = `
   }
   #info-btn:hover { border-color: #7733aa; color: #cc88ff; }
 
+  /* ── Camera screen ── */
+  #screen-camera { background: #000; pointer-events: all; position: relative; }
+  #camera-video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0;
+  }
+  #camera-draw-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    z-index: 1; touch-action: none;
+  }
+  #camera-header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+    padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
+  }
+  #camera-header h2 { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; margin: 0; }
+  #camera-toolbar {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
+    padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center;
+    background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
+  }
+  .camera-tool-btn {
+    padding: 0.45rem 1.1rem; border: 1px solid #442255; background: rgba(30,10,50,0.7);
+    color: #997799; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .camera-tool-btn:hover { border-color: #7733aa; color: #cc88ff; }
+  .camera-tool-btn.active { border-color: #9944ff; color: #cc88ff; background: rgba(60,15,100,0.8); }
+  #camera-error {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 2; color: #ff6666; font-size: 0.9rem; text-align: center;
+    padding: 1rem; display: none;
+  }
+
   /* ── Corruption bar ── */
   #corruption-bar-wrap {
     position: fixed; bottom: 0; left: 0; right: 0;
@@ -683,6 +718,10 @@ export class UIManager {
   private _whisperOverlay: HTMLDivElement | null = null
   private _whisperTimeout: ReturnType<typeof setTimeout> | null = null
   private _vesselWarning: HTMLDivElement | null = null
+  // Camera screen state
+  private _cameraStream: MediaStream | null = null
+  private _cameraDrawCtx: CanvasRenderingContext2D | null = null
+  private _cameraDrawing = false
 
   constructor() {
     this._injectStyles()
@@ -714,6 +753,51 @@ export class UIManager {
   showGrimoire(): void {
     this._renderGrimoire()
     this._show('grimoire')
+  }
+
+  async showCamera(): Promise<void> {
+    const video = this._root.querySelector<HTMLVideoElement>('#camera-video')
+    const errorEl = this._root.querySelector<HTMLElement>('#camera-error')
+    const drawCanvas = this._root.querySelector<HTMLCanvasElement>('#camera-draw-canvas')
+    if (!video || !drawCanvas) return
+
+    // Clear previous error
+    if (errorEl) errorEl.style.display = 'none'
+
+    this._show('camera')
+
+    // Resize drawing canvas to match screen
+    drawCanvas.width = window.innerWidth * (window.devicePixelRatio || 1)
+    drawCanvas.height = window.innerHeight * (window.devicePixelRatio || 1)
+    drawCanvas.style.width = '100%'
+    drawCanvas.style.height = '100%'
+    this._cameraDrawCtx = drawCanvas.getContext('2d')
+    if (this._cameraDrawCtx) {
+      this._cameraDrawCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1)
+      this._cameraDrawCtx.lineCap = 'round'
+      this._cameraDrawCtx.lineJoin = 'round'
+    }
+
+    // Start camera
+    const stream = await startCamera('environment')
+    if (!stream) {
+      if (errorEl) {
+        errorEl.textContent = 'Camera unavailable — check permissions'
+        errorEl.style.display = 'block'
+      }
+      return
+    }
+    this._cameraStream = stream
+    video.srcObject = stream
+  }
+
+  private _stopCamera(): void {
+    if (this._cameraStream) {
+      stopCamera(this._cameraStream)
+      this._cameraStream = null
+    }
+    const video = this._root.querySelector<HTMLVideoElement>('#camera-video')
+    if (video) video.srcObject = null
   }
 
   showCharging(demonName: string): void {
@@ -1074,25 +1158,6 @@ export class UIManager {
     }, 4_000)
   }
 
-  /** Update the camera button to reflect on/off state. */
-  updateCameraState(active: boolean): void {
-    const btn = document.getElementById('camera-btn')
-    if (btn) btn.classList.toggle('active', active)
-  }
-
-  /** Flash a brief error when camera access fails. */
-  showCameraError(): void {
-    const overlay = this._whisperOverlay
-    if (!overlay) return
-    overlay.textContent = 'Camera unavailable'
-    overlay.className = 'whisper-overlay visible low'
-    if (this._whisperTimeout !== null) clearTimeout(this._whisperTimeout)
-    this._whisperTimeout = window.setTimeout(() => {
-      overlay.classList.remove('visible')
-      this._whisperTimeout = null
-    }, 3000)
-  }
-
   /** Show the full-screen vessel warning. */
   showVesselWarning(): void {
     this._vesselWarning?.classList.add('visible')
@@ -1118,6 +1183,7 @@ export class UIManager {
     this._screens.pvp = this._buildPvP()
     this._screens.coven = this._buildCoven()
     this._screens.info = this._buildGameplayInfo()
+    this._screens.camera = this._buildCamera()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -1962,6 +2028,117 @@ export class UIManager {
     return screen
   }
 
+  private _buildCamera(): HTMLDivElement {
+    const screen = el('div', 'screen', 'screen-camera')
+
+    // Video element (camera feed)
+    const video = document.createElement('video')
+    video.id = 'camera-video'
+    video.autoplay = true
+    video.playsInline = true
+    video.muted = true
+    screen.appendChild(video)
+
+    // Drawing canvas overlay
+    const drawCanvas = document.createElement('canvas')
+    drawCanvas.id = 'camera-draw-canvas'
+    screen.appendChild(drawCanvas)
+
+    // Error message (hidden by default)
+    const errorEl = el('div', '', 'camera-error')
+    screen.appendChild(errorEl)
+
+    // Header
+    const header = el('div', '', 'camera-header')
+    const backBtn = el('button', 'phase-btn')
+    backBtn.textContent = '← Back'
+    backBtn.addEventListener('click', () => {
+      this._stopCamera()
+      this._clearCameraCanvas()
+      this.showRitual(
+        this._root.querySelector<HTMLElement>('#demon-name-label')?.textContent ?? '',
+      )
+    })
+    header.appendChild(backBtn)
+    const h2 = el('h2')
+    h2.textContent = 'Camera Ritual'
+    header.appendChild(h2)
+    screen.appendChild(header)
+
+    // Toolbar
+    const toolbar = el('div', '', 'camera-toolbar')
+
+    const clearBtn = el('button', 'camera-tool-btn')
+    clearBtn.textContent = 'Clear'
+    clearBtn.addEventListener('click', () => this._clearCameraCanvas())
+    toolbar.appendChild(clearBtn)
+
+    // Stroke colour options
+    const colours = [
+      { label: 'Purple', value: '#bb66ff' },
+      { label: 'Gold', value: '#ffcc44' },
+      { label: 'White', value: '#ffffff' },
+    ]
+    let activeColour = colours[0].value
+
+    for (const c of colours) {
+      const btn = el('button', 'camera-tool-btn')
+      btn.textContent = c.label
+      if (c.value === activeColour) btn.classList.add('active')
+      btn.addEventListener('click', () => {
+        activeColour = c.value
+        toolbar.querySelectorAll('.camera-tool-btn').forEach(b => b.classList.remove('active'))
+        btn.classList.add('active')
+      })
+      toolbar.appendChild(btn)
+    }
+
+    screen.appendChild(toolbar)
+
+    // ── Drawing logic (pointer events on the canvas) ──
+    let lastX = 0
+    let lastY = 0
+
+    drawCanvas.addEventListener('pointerdown', (e) => {
+      this._cameraDrawing = true
+      const rect = drawCanvas.getBoundingClientRect()
+      lastX = e.clientX - rect.left
+      lastY = e.clientY - rect.top
+    })
+
+    drawCanvas.addEventListener('pointermove', (e) => {
+      if (!this._cameraDrawing || !this._cameraDrawCtx) return
+      const rect = drawCanvas.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+
+      const ctx = this._cameraDrawCtx
+      ctx.strokeStyle = activeColour
+      ctx.lineWidth = 3
+      ctx.shadowColor = activeColour
+      ctx.shadowBlur = 8
+      ctx.beginPath()
+      ctx.moveTo(lastX, lastY)
+      ctx.lineTo(x, y)
+      ctx.stroke()
+
+      lastX = x
+      lastY = y
+    })
+
+    drawCanvas.addEventListener('pointerup', () => { this._cameraDrawing = false })
+    drawCanvas.addEventListener('pointercancel', () => { this._cameraDrawing = false })
+
+    return screen
+  }
+
+  private _clearCameraCanvas(): void {
+    const canvas = this._root.querySelector<HTMLCanvasElement>('#camera-draw-canvas')
+    if (canvas && this._cameraDrawCtx) {
+      this._cameraDrawCtx.clearRect(0, 0, canvas.width, canvas.height)
+    }
+  }
+
   private _buildCorruptionOverlays(): void {
     // Corruption bar (fixed at bottom of viewport)
     const barWrap = document.createElement('div')
@@ -2240,6 +2417,7 @@ export class UIManager {
 
   private _show(name: keyof typeof this._screens): void {
     if (name !== 'world') this._stopRadar()
+    if (name !== 'camera') this._stopCamera()
     for (const [key, screen] of Object.entries(this._screens)) {
       screen.classList.toggle('active', key === name)
     }
