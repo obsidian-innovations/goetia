@@ -1,4 +1,4 @@
-import { getDemon, listDemons } from '@engine/demons/DemonRegistry'
+import { listDemons } from '@engine/demons/DemonRegistry'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
@@ -6,7 +6,7 @@ import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
 import type { DrawingPhase } from '@stores/canvasStore'
-import type { Demon, GlyphDifficulty, SealGeometry, Sigil, SigilVisualState } from '@engine/sigil/Types'
+import type { Demon, GlyphDifficulty, Sigil, SigilVisualState } from '@engine/sigil/Types'
 import type { AttentionGesture } from '@engine/charging/AttentionGesture'
 import type { DemonicDemand } from '@engine/demands/DemandEngine'
 import type { ResearchState } from '@engine/research/ResearchEngine'
@@ -33,7 +33,8 @@ export interface UICallbacks {
   onCreateCoven?: (name: string) => void
   onDifficultyChange?: (difficulty: GlyphDifficulty) => void
   onAttemptPurification?: () => void
-  onCameraToggle?: () => void
+  onEnterCameraMode?: () => void
+  onExitCameraMode?: () => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -614,40 +615,8 @@ const STYLE = `
   }
   #info-btn:hover { border-color: #7733aa; color: #cc88ff; }
 
-  /* ── Camera screen ── */
-  #screen-camera { background: #000; pointer-events: all; position: relative; }
-  #camera-video {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; z-index: 0;
-  }
-  #camera-draw-canvas {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    z-index: 1; touch-action: none;
-  }
-  #camera-header {
-    position: absolute; top: 0; left: 0; right: 0; z-index: 2;
-    padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
-  }
-  #camera-header h2 { flex: 1; text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; margin: 0; }
-  #camera-toolbar {
-    position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
-    padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center;
-    background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
-  }
-  .camera-tool-btn {
-    padding: 0.45rem 1.1rem; border: 1px solid #442255; background: rgba(30,10,50,0.7);
-    color: #997799; border-radius: 4px; cursor: pointer;
-    font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
-    transition: border-color 0.2s, color 0.2s;
-  }
-  .camera-tool-btn:hover { border-color: #7733aa; color: #cc88ff; }
-  .camera-tool-btn.active { border-color: #9944ff; color: #cc88ff; background: rgba(60,15,100,0.8); }
-  #camera-error {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    z-index: 2; color: #ff6666; font-size: 0.9rem; text-align: center;
-    padding: 1rem; display: none;
-  }
+  /* ── Camera button active state ── */
+  #camera-btn.active { border-color: #44aa77; background: rgba(20,60,40,0.7); color: #99ddbb; }
 
   /* ── Corruption bar ── */
   #corruption-bar-wrap {
@@ -718,10 +687,10 @@ export class UIManager {
   private _whisperOverlay: HTMLDivElement | null = null
   private _whisperTimeout: ReturnType<typeof setTimeout> | null = null
   private _vesselWarning: HTMLDivElement | null = null
-  // Camera screen state
+  // Camera ritual state
   private _cameraStream: MediaStream | null = null
-  private _cameraDrawCtx: CanvasRenderingContext2D | null = null
-  private _cameraDrawing = false
+  private _cameraVideo: HTMLVideoElement | null = null
+  private _isCameraRitual = false
 
   constructor() {
     this._injectStyles()
@@ -755,52 +724,77 @@ export class UIManager {
     this._show('grimoire')
   }
 
-  async showCamera(): Promise<void> {
-    const video = this._root.querySelector<HTMLVideoElement>('#camera-video')
-    const errorEl = this._root.querySelector<HTMLElement>('#camera-error')
-    const drawCanvas = this._root.querySelector<HTMLCanvasElement>('#camera-draw-canvas')
-    if (!video || !drawCanvas) return
+  /**
+   * Provide the #app container so we can create the camera video element inside it.
+   * Must be called after PixiJS canvas is appended to the container.
+   */
+  setAppContainer(container: HTMLElement): void {
+    const video = document.createElement('video')
+    video.id = 'camera-ritual-video'
+    video.autoplay = true
+    video.playsInline = true
+    video.muted = true
+    container.prepend(video)
+    this._cameraVideo = video
+  }
 
-    // Clear previous error
-    if (errorEl) errorEl.style.display = 'none'
-
-    this._show('camera')
-
-    // Resize drawing canvas to match screen
-    drawCanvas.width = window.innerWidth * (window.devicePixelRatio || 1)
-    drawCanvas.height = window.innerHeight * (window.devicePixelRatio || 1)
-    drawCanvas.style.width = '100%'
-    drawCanvas.style.height = '100%'
-    this._cameraDrawCtx = drawCanvas.getContext('2d')
-    if (this._cameraDrawCtx) {
-      this._cameraDrawCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1)
-      this._cameraDrawCtx.lineCap = 'round'
-      this._cameraDrawCtx.lineJoin = 'round'
+  /** Toggle camera mode on the ritual screen. */
+  async toggleCameraRitual(): Promise<void> {
+    if (this._isCameraRitual) {
+      this._exitCameraRitual()
+    } else {
+      await this._startCameraRitual()
     }
+  }
 
-    // Draw the current demon's seal nodes + ghost edges
-    this._drawSealOnCamera()
+  private async _startCameraRitual(): Promise<void> {
+    if (!this._cameraVideo) return
 
-    // Start camera
     const stream = await startCamera('environment')
     if (!stream) {
-      if (errorEl) {
-        errorEl.textContent = 'Camera unavailable — check permissions'
-        errorEl.style.display = 'block'
+      // Brief visual feedback — flash the CAM button red
+      const camBtn = this._root.querySelector<HTMLElement>('#camera-btn')
+      if (camBtn) {
+        camBtn.style.borderColor = '#ff4444'
+        camBtn.style.color = '#ff6666'
+        setTimeout(() => {
+          camBtn.style.borderColor = ''
+          camBtn.style.color = ''
+        }, 1500)
       }
       return
     }
+
     this._cameraStream = stream
-    video.srcObject = stream
+    this._cameraVideo.srcObject = stream
+    this._cameraVideo.style.display = 'block'
+    this._isCameraRitual = true
+
+    // Update CAM button state
+    const camBtn = this._root.querySelector<HTMLElement>('#camera-btn')
+    if (camBtn) camBtn.classList.add('active')
+
+    this._callbacks?.onEnterCameraMode?.()
   }
 
-  private _stopCamera(): void {
+  private _exitCameraRitual(): void {
+    if (!this._isCameraRitual) return
+
     if (this._cameraStream) {
       stopCamera(this._cameraStream)
       this._cameraStream = null
     }
-    const video = this._root.querySelector<HTMLVideoElement>('#camera-video')
-    if (video) video.srcObject = null
+    if (this._cameraVideo) {
+      this._cameraVideo.srcObject = null
+      this._cameraVideo.style.display = 'none'
+    }
+    this._isCameraRitual = false
+
+    // Update CAM button state
+    const camBtn = this._root.querySelector<HTMLElement>('#camera-btn')
+    if (camBtn) camBtn.classList.remove('active')
+
+    this._callbacks?.onExitCameraMode?.()
   }
 
   showCharging(demonName: string): void {
@@ -1186,7 +1180,6 @@ export class UIManager {
     this._screens.pvp = this._buildPvP()
     this._screens.coven = this._buildCoven()
     this._screens.info = this._buildGameplayInfo()
-    this._screens.camera = this._buildCamera()
     for (const screen of Object.values(this._screens)) {
       this._root.appendChild(screen)
     }
@@ -1318,7 +1311,7 @@ export class UIManager {
 
     const camBtn = el('button', '', 'camera-btn')
     camBtn.textContent = 'CAM'
-    camBtn.addEventListener('click', () => this._callbacks?.onCameraToggle?.())
+    camBtn.addEventListener('click', () => this.toggleCameraRitual())
     header.appendChild(camBtn)
 
     screen.appendChild(header)
@@ -2031,197 +2024,6 @@ export class UIManager {
     return screen
   }
 
-  private _buildCamera(): HTMLDivElement {
-    const screen = el('div', 'screen', 'screen-camera')
-
-    // Video element (camera feed)
-    const video = document.createElement('video')
-    video.id = 'camera-video'
-    video.autoplay = true
-    video.playsInline = true
-    video.muted = true
-    screen.appendChild(video)
-
-    // Drawing canvas overlay
-    const drawCanvas = document.createElement('canvas')
-    drawCanvas.id = 'camera-draw-canvas'
-    screen.appendChild(drawCanvas)
-
-    // Error message (hidden by default)
-    const errorEl = el('div', '', 'camera-error')
-    screen.appendChild(errorEl)
-
-    // Header
-    const header = el('div', '', 'camera-header')
-    const backBtn = el('button', 'phase-btn')
-    backBtn.textContent = '← Back'
-    backBtn.addEventListener('click', () => {
-      this._stopCamera()
-      this._clearCameraCanvas()
-      this.showRitual(
-        this._root.querySelector<HTMLElement>('#demon-name-label')?.textContent ?? '',
-      )
-    })
-    header.appendChild(backBtn)
-    const h2 = el('h2')
-    h2.textContent = 'Camera Ritual'
-    header.appendChild(h2)
-    screen.appendChild(header)
-
-    // Toolbar
-    const toolbar = el('div', '', 'camera-toolbar')
-
-    const clearBtn = el('button', 'camera-tool-btn')
-    clearBtn.textContent = 'Clear'
-    clearBtn.addEventListener('click', () => this._clearCameraCanvas())
-    toolbar.appendChild(clearBtn)
-
-    // Stroke colour options
-    const colours = [
-      { label: 'Purple', value: '#bb66ff' },
-      { label: 'Gold', value: '#ffcc44' },
-      { label: 'White', value: '#ffffff' },
-    ]
-    let activeColour = colours[0].value
-
-    for (const c of colours) {
-      const btn = el('button', 'camera-tool-btn')
-      btn.textContent = c.label
-      if (c.value === activeColour) btn.classList.add('active')
-      btn.addEventListener('click', () => {
-        activeColour = c.value
-        toolbar.querySelectorAll('.camera-tool-btn').forEach(b => b.classList.remove('active'))
-        btn.classList.add('active')
-      })
-      toolbar.appendChild(btn)
-    }
-
-    screen.appendChild(toolbar)
-
-    // ── Drawing logic (pointer events on the canvas) ──
-    let lastX = 0
-    let lastY = 0
-
-    drawCanvas.addEventListener('pointerdown', (e) => {
-      this._cameraDrawing = true
-      const rect = drawCanvas.getBoundingClientRect()
-      lastX = e.clientX - rect.left
-      lastY = e.clientY - rect.top
-    })
-
-    drawCanvas.addEventListener('pointermove', (e) => {
-      if (!this._cameraDrawing || !this._cameraDrawCtx) return
-      const rect = drawCanvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
-      const y = e.clientY - rect.top
-
-      const ctx = this._cameraDrawCtx
-      ctx.strokeStyle = activeColour
-      ctx.lineWidth = 3
-      ctx.shadowColor = activeColour
-      ctx.shadowBlur = 8
-      ctx.beginPath()
-      ctx.moveTo(lastX, lastY)
-      ctx.lineTo(x, y)
-      ctx.stroke()
-
-      lastX = x
-      lastY = y
-    })
-
-    drawCanvas.addEventListener('pointerup', () => { this._cameraDrawing = false })
-    drawCanvas.addEventListener('pointercancel', () => { this._cameraDrawing = false })
-
-    return screen
-  }
-
-  private _clearCameraCanvas(): void {
-    const canvas = this._root.querySelector<HTMLCanvasElement>('#camera-draw-canvas')
-    if (canvas && this._cameraDrawCtx) {
-      this._cameraDrawCtx.clearRect(0, 0, canvas.width, canvas.height)
-    }
-    // Redraw the seal so it stays visible after clearing user strokes
-    this._drawSealOnCamera()
-  }
-
-  /**
-   * Draw the current demon's seal geometry (ghost edges + nodes)
-   * on the camera screen's 2D canvas so the player can trace over it.
-   */
-  private _drawSealOnCamera(): void {
-    const ctx = this._cameraDrawCtx
-    if (!ctx) return
-
-    const demonId = useCanvasStore.getState().currentDemonId
-    if (!demonId) return
-
-    let geometry: SealGeometry
-    try {
-      geometry = getDemon(demonId).sealGeometry
-    } catch {
-      return
-    }
-
-    const canvas = this._root.querySelector<HTMLCanvasElement>('#camera-draw-canvas')
-    if (!canvas) return
-
-    // Logical dimensions (before devicePixelRatio scaling)
-    const w = canvas.clientWidth
-    const h = canvas.clientHeight
-
-    // Same padding as SealLayer to keep nodes away from header/toolbar
-    const PAD_TOP = 56
-    const PAD_BOT = 72
-
-    const toPixel = (p: { x: number; y: number }) => ({
-      x: p.x * w,
-      y: PAD_TOP + p.y * (h - PAD_TOP - PAD_BOT),
-    })
-
-    ctx.save()
-
-    // ── Ghost edges ──
-    ctx.strokeStyle = '#6633aa'
-    ctx.lineWidth = 1.5
-    ctx.globalAlpha = 0.55
-    ctx.shadowColor = '#6633aa'
-    ctx.shadowBlur = 4
-
-    for (const edge of geometry.edges) {
-      const path = edge.canonicalPath
-      if (path.length < 2) continue
-      const first = toPixel(path[0])
-      ctx.beginPath()
-      ctx.moveTo(first.x, first.y)
-      for (let i = 1; i < path.length; i++) {
-        const p = toPixel(path[i])
-        ctx.lineTo(p.x, p.y)
-      }
-      ctx.stroke()
-    }
-
-    // ── Nodes ──
-    ctx.globalAlpha = 0.6
-    ctx.shadowBlur = 6
-    ctx.shadowColor = '#7755bb'
-
-    for (const node of geometry.nodes) {
-      const { x, y } = toPixel(node.position)
-      ctx.beginPath()
-      ctx.arc(x, y, 5, 0, Math.PI * 2)
-      ctx.fillStyle = '#7755bb'
-      ctx.fill()
-      // Bright centre dot
-      ctx.beginPath()
-      ctx.arc(x, y, 2, 0, Math.PI * 2)
-      ctx.fillStyle = '#bb88ee'
-      ctx.globalAlpha = 0.9
-      ctx.fill()
-      ctx.globalAlpha = 0.6
-    }
-
-    ctx.restore()
-  }
 
   private _buildCorruptionOverlays(): void {
     // Corruption bar (fixed at bottom of viewport)
@@ -2501,7 +2303,7 @@ export class UIManager {
 
   private _show(name: keyof typeof this._screens): void {
     if (name !== 'world') this._stopRadar()
-    if (name !== 'camera') this._stopCamera()
+    if (name !== 'ritual') this._exitCameraRitual()
     for (const [key, screen] of Object.entries(this._screens)) {
       screen.classList.toggle('active', key === name)
     }
