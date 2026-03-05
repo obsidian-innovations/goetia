@@ -12,7 +12,7 @@ Goetia is a browser-based occult game where players craft sigils to summon and b
 2. **Intent Glyphs** — inscribe symbolic glyphs that declare purpose
 3. **Binding Ring** — close the ritual by drawing a circle
 
-Completed sigils are stored in a personal **grimoire** (localStorage-backed).
+Completed sigils are stored in a personal **grimoire** (localStorage-backed). Beyond the core ritual, the game includes sigil charging (attention-based), corruption/purification, PvP clashes, geolocation-based world encounters, demon research, and social covens.
 
 ---
 
@@ -46,17 +46,37 @@ engine  →  canvas  →  stores  →  services
                  ↘  ui  ↗
 ```
 
-**`src/engine/`** — Pure TypeScript game logic. No PixiJS, no DOM, no side effects. Two sub-packages:
-- `sigil/` — all evaluation logic and shared types
-- `demons/` — demon data registry (`DemonRegistry.ts`)
+**`src/engine/`** — Pure TypeScript game logic. No PixiJS, no DOM, no side effects. Ten sub-packages:
+- `sigil/` — evaluation logic and shared types
+- `demons/` — demon data registry, split by rank (kings, dukes, princes, marquises, earls, presidents, knights, barons) with shared `geometry.ts` helpers
+- `charging/` — `ChargingEngine`, `AttentionGesture`, `HoldWindow` — sigil charging with attention-based mechanics
+- `corruption/` — `CorruptionEngine`, `WhisperEngine`, `PurificationEngine`, `VesselState` — corruption accumulation, whispers, purification, vessel progression
+- `demands/` — `DemandEngine`, `DemandTemplates` — demonic demands system
+- `pvp/` — `ClashResolver`, `HexSystem`, `MisfireEngine` — PvP clash resolution, hex/ward casting, misfire effects
+- `research/` — `ResearchEngine`, `ResearchActivities` — progressive demon seal geometry revelation
+- `social/` — `CovenEngine` — coven creation and management
+- `world/` — `ThinPlaces`, `ThinPlaceGenerator`, `FixedThinPlaces`, `Encounters`, `KingEvent` — geolocation-based thin places and encounters
+- `grimoire/` — grimoire engine logic (placeholder)
 
 **`src/canvas/`** — PixiJS `Container` subclasses for rendering, plus `RitualCanvas.ts` which orchestrates them. Translates engine output into visuals and DOM pointer events into engine input. **All coordinates leaving this layer are normalised 0–1.**
 
-**`src/stores/`** — Two Zustand slices: `canvasStore` (runtime drawing state) and `grimoireStore` (grimoire state wrapping `GrimoireDB`). No game logic lives here.
+**`src/stores/`** — Seven Zustand slices. No game logic lives here.
+- `canvasStore` — runtime drawing state
+- `grimoireStore` — grimoire state wrapping `GrimoireDB`
+- `chargingStore` — active charging sessions, attention gestures
+- `corruptionStore` — corruption state, whispers, vessel tracking
+- `pvpStore` — PvP clash challenges, hexes, wards, covens
+- `worldStore` — thin places, geolocation, dynamic place generation
+- `researchStore` — demon research progress, geometry revelation
 
-**`src/services/`** — Side-effect integrations: `audio.ts` (Web Audio API synthesis) and `haptics.ts` (Web Vibration API).
+**`src/services/`** — Side-effect integrations:
+- `audio.ts` — Web Audio API synthesis
+- `haptics.ts` — Web Vibration API
+- `geolocation.ts` — Geolocation API (permission query, watch position)
+- `network.ts` — networking for PvP (clash challenges, hex casting, matchmaking)
+- `camera.ts` — device camera integration (getUserMedia)
 
-**`src/db/`** — `GrimoireDB`: localStorage-backed CRUD with enforced status-transition rules. Exported as singleton `grimoireDB`.
+**`src/db/`** — `grimoire.ts`: localStorage-backed CRUD with enforced status-transition rules and research state persistence. Exported as singleton `grimoireDB`.
 
 **`src/ui.ts`** — `UIManager`: pure DOM overlay (no PixiJS). Three screens — demon select, ritual canvas toolbar, grimoire viewer — toggled with CSS classes. Subscribes to `canvasStore` to show/hide the BIND button.
 
@@ -66,7 +86,7 @@ engine  →  canvas  →  stores  →  services
 
 ## Engine Internals (`src/engine/sigil/`)
 
-**`Types.ts`** — Canonical source of truth for all shared types: `Point`, `Sigil`, `Demon`, `StrokeResult`, `RingResult`, `GlyphResult`, `ConnectionResult`, and branded IDs (`NodeId`, `GlyphId`). Every engine value is in normalised 0–1 space.
+**`Types.ts`** — Canonical source of truth for all shared types: `Point`, `Sigil`, `Demon`, `StrokeResult`, `RingResult`, `GlyphResult`, `ConnectionResult`, `SigilStatus`, `SigilVisualState`, `DemonRank`, `DemonDomain`, `SealNode`, `SealEdge`, `SealGeometry`, `PlacedGlyph`, `IntentCoherenceResult`, and branded IDs (`NodeId`, `GlyphId`). Every engine value is in normalised 0–1 space.
 
 **`geometry.ts`** — Pure geometry utilities: `normalizePathToUnitSpace`, `resamplePath`, `discreteFrechetDistance`, `fitCircle` (Kasa algebraic least-squares), `signedArea`, `doesPathSelfIntersect`, `isPathClosed`, `pathLength`, and statistical helpers.
 
@@ -84,7 +104,9 @@ engine  →  canvas  →  stores  →  services
 
 **`SigilComposer`** — Stateful builder. `setSealIntegrity`, `addGlyph`, `setBindingRing`, then `compose()` → `Sigil`. Overall integrity = `seal×0.40 + coherence×0.35 + ring×0.25`. Visual states: charged ≥ 0.85, healthy ≥ 0.60, unstable ≥ 0.30, corrupted < 0.30, dormant if no ring.
 
-**`DemonRegistry`** (`src/engine/demons/DemonRegistry.ts`) — `DEMON_REGISTRY` with 6 demons. `getDemon(id)` throws `DemonNotFoundError` for unknown IDs. Edge weights per demon sum to ~1.0.
+**`SigilLifecycle`** — `SigilLifecycleManager` manages sigil status transitions (draft → complete → resting → awakened → charged → spent) with validation. Throws on invalid transitions.
+
+**`DemonRegistry`** (`src/engine/demons/DemonRegistry.ts`) — `DEMON_REGISTRY` with 80 demons across 8 rank files (kings, dukes, princes, marquises, earls, presidents, knights, barons). Shared seal geometry helpers in `geometry.ts` (`nid`, `mkEdge`, `circle`, `hub`, `pentagram`, `wheel`). `getDemon(id)` throws `DemonNotFoundError` for unknown IDs. Edge weights per demon sum to ~1.0.
 
 ---
 
@@ -98,7 +120,13 @@ engine  →  canvas  →  stores  →  services
 
 **`BindingRingLayer`** — Circle + glow halo coloured by `overallStrength`; weak-point arcs in red, slowly rotating on `Ticker.shared`. Has `clearRing()` and `destroy()`.
 
-**`RitualCanvas`** — Orchestrator. Holds all four layers and routes native DOM pointer events by phase:
+**`ChargingOverlayLayer`** — Pulsing ring overlay during sigil charging. Colour and intensity reflect charge progress (0–1); red flicker on decay. Driven externally via setters.
+
+**`DistortionLayer`** — Visual interference effects during PvE encounters: animated noise, colour flashes, edge flickers. Intensity 0 = invisible, 1 = maximum interference.
+
+**`CorruptionEffects`** — Corruption visual overlay with four stages: clean (invisible), tainted (faint red vignette), compromised (scanlines + heavier vignette), vessel (pulsing red-black border + flickering noise). Driven by `setLevel(0–1)`.
+
+**`RitualCanvas`** — Orchestrator. Holds all seven layers and routes native DOM pointer events by phase:
 - **SEAL**: snap `fromNode` on down → trace → snap `toNode` on up → `SealReconstructor.attemptConnection()`
 - **GLYPH**: stroke → `GlyphRecognizer.recognize()` → place glyph at stroke centroid
 - **RING**: stroke in pixel space → `BindingRingEvaluator.evaluate()` → normalise `center` by `(w, h)` and `radius` by `min(w, h)` before storing
