@@ -71,6 +71,7 @@ async function init(): Promise<void> {
   const container = document.getElementById('app')
   if (container) {
     container.appendChild(app.canvas)
+    ui.setAppContainer(container)
   }
 
   // ── Core objects ──────────────────────────────────────────────────────────
@@ -207,8 +208,12 @@ async function init(): Promise<void> {
       ui.updateCoven(usePvPStore.getState().covenState)
     },
 
-    onCameraToggle() {
-      ui.showCamera()
+    onEnterCameraMode() {
+      ritualCanvas.enterCameraMode()
+    },
+
+    onExitCameraMode() {
+      ritualCanvas.exitCameraMode()
     },
 
     onAttemptPurification() {

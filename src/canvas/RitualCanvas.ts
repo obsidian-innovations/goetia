@@ -64,6 +64,9 @@ export class RitualCanvas {
   // Per-demon state
   private _sealReconstructor: SealReconstructor | null = null
 
+  // Camera mode
+  private _cameraMode = false
+
   // Pointer state
   private _isDrawing = false
   private _pendingFromNode: NodeId | null = null
@@ -152,6 +155,24 @@ export class RitualCanvas {
   /** Set the PvE encounter interference intensity (0 = none, 1 = maximum). */
   setDistortionIntensity(intensity: number): void {
     this._distortionLayer.setIntensity(intensity)
+  }
+
+  /** Enter camera mode: hide opaque background, make WebGL canvas transparent. */
+  enterCameraMode(): void {
+    this._atmospheric.visible = false
+    this._app.renderer.background.alpha = 0
+    this._cameraMode = true
+  }
+
+  /** Exit camera mode: restore opaque background. */
+  exitCameraMode(): void {
+    this._atmospheric.visible = true
+    this._app.renderer.background.alpha = 1
+    this._cameraMode = false
+  }
+
+  isCameraMode(): boolean {
+    return this._cameraMode
   }
 
   resize(width: number, height: number): void {
