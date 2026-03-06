@@ -2302,8 +2302,13 @@ export class UIManager {
       }
     })
 
-    // Fix tile rendering after container becomes visible
-    setTimeout(() => map.invalidateSize(), 100)
+    // Fix tile rendering after container becomes visible — use rAF + delay
+    // to ensure the screen's CSS transition from display:none is complete
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (this._leafletMap) this._leafletMap.invalidateSize()
+      }, 150)
+    })
   }
 
   private _updateMapMarkers(): void {
