@@ -4,17 +4,17 @@ import type { ConnectionResult, PlacedGlyph, RingResult, GlyphId, IntentCoherenc
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function makeConnection(edgeKey = 'a-b', accuracy = 0.8): ConnectionResult {
-  return { fromNode: 'a', toNode: 'b', edgeKey, accuracy, valid: true } as ConnectionResult
+function makeConnection(accuracy = 0.8): ConnectionResult {
+  return { fromNode: 'a' as any, toNode: 'b' as any, accuracy, deviation: 0.1, valid: true }
 }
 
-function makeGlyph(glyphId: string, score = 0.7): PlacedGlyph {
+function makeGlyph(glyphId: string, confidence = 0.7): PlacedGlyph {
   return {
     glyphId: glyphId as GlyphId,
     position: { x: 0.5, y: 0.5 },
-    score,
-    strokes: [],
-  } as PlacedGlyph
+    confidence,
+    timestamp: Date.now(),
+  }
 }
 
 function makeRingResult(strength = 0.75): RingResult {
@@ -24,9 +24,9 @@ function makeRingResult(strength = 0.75): RingResult {
     circularity: 0.8,
     closure: 0.7,
     consistency: 0.8,
-    weakPoints: 0,
+    weakPoints: [],
     overallStrength: strength,
-  } as RingResult
+  }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -69,8 +69,8 @@ describe('canvasStore', () => {
   describe('addConnection', () => {
     it('appends connections', () => {
       const store = useCanvasStore.getState()
-      store.addConnection(makeConnection('a-b'))
-      store.addConnection(makeConnection('b-c'))
+      store.addConnection(makeConnection(0.8))
+      store.addConnection(makeConnection(0.7))
       expect(useCanvasStore.getState().completedConnections).toHaveLength(2)
     })
   })
@@ -87,7 +87,7 @@ describe('canvasStore', () => {
       store.addGlyph(makeGlyph('power', 0.9))
       const glyphs = useCanvasStore.getState().placedGlyphs
       expect(glyphs).toHaveLength(1)
-      expect(glyphs[0].score).toBe(0.9)
+      expect(glyphs[0].confidence).toBe(0.9)
     })
   })
 
