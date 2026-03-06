@@ -2255,9 +2255,12 @@ export class UIManager {
     const container = this._root.querySelector<HTMLElement>('#world-map')
     if (!container) return
 
+    const initialCenter: [number, number] = this._worldPlayerPos
+      ? [this._worldPlayerPos.lat, this._worldPlayerPos.lng]
+      : [45.7975, 24.1522]
     const map = L.map(container, {
-      center: [45.7975, 24.1522],
-      zoom: 16,
+      center: initialCenter,
+      zoom: 15,
       zoomControl: false,
       attributionControl: false,
     })
@@ -2306,18 +2309,32 @@ export class UIManager {
   private _updateMapMarkers(): void {
     if (!this._leafletMap) return
 
-    for (let i = 0; i < this._mapMarkers.length; i++) {
-      const marker = this._mapMarkers[i]
-      const places = this._worldNearbyPlaces
-      if (i < places.length) {
-        const isCurrent = this._worldCurrentPlace?.id === places[i].id
-        marker.setStyle({
-          fillColor: isCurrent ? '#55ffaa' : '#aa55ff',
-          color: isCurrent ? '#55ffaa' : '#7733aa',
-        })
-      }
+    // Remove old thin-place markers and rebuild from current nearby places
+    for (const marker of this._mapMarkers) {
+      marker.remove()
+    }
+    this._mapMarkers = []
+
+    const places = this._worldNearbyPlaces
+    for (const tp of places) {
+      const isCurrent = this._worldCurrentPlace?.id === tp.id
+      const marker = L.circleMarker([tp.center.lat, tp.center.lng], {
+        radius: 6 + (1 - tp.veilStrength) * 4,
+        fillColor: isCurrent ? '#55ffaa' : '#aa55ff',
+        fillOpacity: 0.8,
+        color: isCurrent ? '#55ffaa' : '#7733aa',
+        weight: 2,
+      }).addTo(this._leafletMap!)
+      marker.bindPopup(
+        `<div style="color:#cbb8dd;background:#1a0a2e;padding:0.4rem 0.6rem;border-radius:4px;font-family:Georgia,serif;font-size:0.8rem;">` +
+        `<strong>${_thinPlaceLabel(tp)}</strong><br/>` +
+        `Veil: ${Math.round(tp.veilStrength * 100)}% &middot; Radius: ${tp.radiusMeters}m</div>`,
+        { className: 'goetia-popup', closeButton: false },
+      )
+      this._mapMarkers.push(marker)
     }
 
+    // Update or create player marker and pan map to player position
     if (this._worldPlayerPos) {
       if (this._playerMarker) {
         this._playerMarker.setLatLng([this._worldPlayerPos.lat, this._worldPlayerPos.lng])
@@ -2325,8 +2342,9 @@ export class UIManager {
         this._playerMarker = L.circleMarker(
           [this._worldPlayerPos.lat, this._worldPlayerPos.lng],
           { radius: 6, fillColor: '#ffffff', fillOpacity: 1, color: '#cccccc', weight: 2 },
-        ).addTo(this._leafletMap)
+        ).addTo(this._leafletMap!)
       }
+      this._leafletMap.setView([this._worldPlayerPos.lat, this._worldPlayerPos.lng], 15)
     }
   }
 

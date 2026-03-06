@@ -184,6 +184,10 @@ async function init(): Promise<void> {
         if (pos) {
           useWorldStore.getState().setLocationPermission('granted')
           useWorldStore.getState().updatePosition(pos)
+          watchPosition((p) => {
+            useWorldStore.getState().updatePosition(p)
+            useWorldStore.getState().setLocationPermission('granted')
+          })
         }
       })
     },
