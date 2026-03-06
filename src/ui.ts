@@ -1,3 +1,5 @@
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { listDemons } from '@engine/demons/DemonRegistry'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
@@ -355,6 +357,25 @@ const STYLE = `
   #world-back:hover { border-color: #7733aa; color: #cc88ff; }
   #world-content { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 0.75rem; gap: 0.75rem; overflow-y: auto; }
   #world-radar { width: 280px; height: 280px; border-radius: 50%; background: rgba(10,5,20,0.8); border: 1px solid #331144; }
+  #world-radar.hidden { display: none; }
+  #world-map {
+    width: 100%; height: 300px; border-radius: 8px; border: 1px solid #331144;
+    overflow: hidden; position: relative;
+  }
+  #world-map.hidden { display: none; }
+  #world-map .leaflet-tile-pane { filter: brightness(0.3) saturate(0.5) hue-rotate(240deg); }
+  #world-map .leaflet-container { background: rgba(8,5,18,1); }
+  #world-view-toggle {
+    padding: 0.3rem 0.9rem; border: 1px solid #331144; background: transparent;
+    color: #776688; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
+    font-family: inherit; font-size: 0.7rem; text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s; align-self: center;
+  }
+  #world-view-toggle:hover { border-color: #7733aa; color: #cc88ff; }
+  .goetia-popup .leaflet-popup-content-wrapper {
+    background: transparent; box-shadow: none; border-radius: 4px; padding: 0;
+  }
+  .goetia-popup .leaflet-popup-tip { background: #1a0a2e; }
   #world-loc-btn {
     padding: 0.5rem 1.5rem; border: 1px solid #664488; background: rgba(50,10,80,0.7);
     color: #cc88ff; border-radius: 4px; cursor: pointer;
@@ -684,6 +705,11 @@ export class UIManager {
   private _worldNearbyPlaces: ThinPlace[] = []
   private _worldCurrentPlace: ThinPlace | null = null
   private _worldPlayerPos: { lat: number; lng: number } | null = null
+  // Leaflet map
+  private _leafletMap: L.Map | null = null
+  private _mapMarkers: L.CircleMarker[] = []
+  private _playerMarker: L.CircleMarker | null = null
+  private _worldViewMode: 'map' | 'radar' = 'map'
   // Corruption overlays
   private _corruptionBarWrap: HTMLDivElement | null = null
   private _corruptionBar: HTMLDivElement | null = null
@@ -881,7 +907,11 @@ export class UIManager {
 
   showWorld(): void {
     this._show('world')
-    this._startRadar()
+    if (this._worldViewMode === 'map') {
+      this._initMap()
+    } else {
+      this._startRadar()
+    }
   }
 
   /**
@@ -943,6 +973,9 @@ export class UIManager {
     // Show/hide "no location" message
     const noLocEl = this._root.querySelector<HTMLElement>('#world-no-location')
     if (noLocEl) noLocEl.style.display = playerPos ? 'none' : 'block'
+
+    // Sync Leaflet markers
+    this._updateMapMarkers()
   }
 
   /** Update the thin place indicator on the charging screen. */
@@ -1664,6 +1697,7 @@ export class UIManager {
     backBtn.textContent = '← Back'
     backBtn.addEventListener('click', () => {
       this._stopRadar()
+      this._destroyMap()
       this.showDemonSelect()
     })
     const h2 = el('h2')
@@ -1674,13 +1708,41 @@ export class UIManager {
 
     const content = el('div', '', 'world-content')
 
-    // Radar canvas
+    // Map container (default view)
+    const mapDiv = document.createElement('div')
+    mapDiv.id = 'world-map'
+    content.appendChild(mapDiv)
+
+    // Radar canvas (hidden by default)
     const radar = document.createElement('canvas')
     radar.id = 'world-radar'
+    radar.classList.add('hidden')
     radar.width = 280
     radar.height = 280
     this._radarCanvas = radar
     content.appendChild(radar)
+
+    // View toggle button
+    const toggle = el('button', '', 'world-view-toggle')
+    toggle.textContent = 'Radar'
+    toggle.addEventListener('click', () => {
+      if (this._worldViewMode === 'map') {
+        this._worldViewMode = 'radar'
+        toggle.textContent = 'Map'
+        mapDiv.classList.add('hidden')
+        radar.classList.remove('hidden')
+        this._destroyMap()
+        this._startRadar()
+      } else {
+        this._worldViewMode = 'map'
+        toggle.textContent = 'Radar'
+        radar.classList.add('hidden')
+        mapDiv.classList.remove('hidden')
+        this._stopRadar()
+        this._initMap()
+      }
+    })
+    content.appendChild(toggle)
 
     // Location button
     const locBtn = el('button', '', 'world-loc-btn')
@@ -2186,6 +2248,97 @@ export class UIManager {
     }
   }
 
+  // ─── Leaflet map ─────────────────────────────────────────────────────────
+
+  private _initMap(): void {
+    if (this._leafletMap) return
+    const container = this._root.querySelector<HTMLElement>('#world-map')
+    if (!container) return
+
+    const map = L.map(container, {
+      center: [45.7975, 24.1522],
+      zoom: 16,
+      zoomControl: false,
+      attributionControl: false,
+    })
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map)
+    this._leafletMap = map
+
+    // Always show all fixed Sibiu places on the map
+    this._mapMarkers = []
+    import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
+      if (!this._leafletMap) return
+      const displayed = this._worldNearbyPlaces.length > 0
+        ? this._worldNearbyPlaces
+        : FIXED_THIN_PLACES
+      for (const tp of displayed) {
+        const isCurrent = this._worldCurrentPlace?.id === tp.id
+        const marker = L.circleMarker([tp.center.lat, tp.center.lng], {
+          radius: 6 + (1 - tp.veilStrength) * 4,
+          fillColor: isCurrent ? '#55ffaa' : '#aa55ff',
+          fillOpacity: 0.8,
+          color: isCurrent ? '#55ffaa' : '#7733aa',
+          weight: 2,
+        }).addTo(this._leafletMap!)
+        marker.bindPopup(
+          `<div style="color:#cbb8dd;background:#1a0a2e;padding:0.4rem 0.6rem;border-radius:4px;font-family:Georgia,serif;font-size:0.8rem;">` +
+          `<strong>${_thinPlaceLabel(tp)}</strong><br/>` +
+          `Veil: ${Math.round(tp.veilStrength * 100)}% &middot; Radius: ${tp.radiusMeters}m</div>`,
+          { className: 'goetia-popup', closeButton: false },
+        )
+        this._mapMarkers.push(marker)
+      }
+
+      if (this._worldPlayerPos) {
+        this._playerMarker = L.circleMarker(
+          [this._worldPlayerPos.lat, this._worldPlayerPos.lng],
+          { radius: 6, fillColor: '#ffffff', fillOpacity: 1, color: '#cccccc', weight: 2 },
+        ).addTo(this._leafletMap!)
+      }
+    })
+
+    // Fix tile rendering after container becomes visible
+    setTimeout(() => map.invalidateSize(), 100)
+  }
+
+  private _updateMapMarkers(): void {
+    if (!this._leafletMap) return
+
+    for (let i = 0; i < this._mapMarkers.length; i++) {
+      const marker = this._mapMarkers[i]
+      const places = this._worldNearbyPlaces
+      if (i < places.length) {
+        const isCurrent = this._worldCurrentPlace?.id === places[i].id
+        marker.setStyle({
+          fillColor: isCurrent ? '#55ffaa' : '#aa55ff',
+          color: isCurrent ? '#55ffaa' : '#7733aa',
+        })
+      }
+    }
+
+    if (this._worldPlayerPos) {
+      if (this._playerMarker) {
+        this._playerMarker.setLatLng([this._worldPlayerPos.lat, this._worldPlayerPos.lng])
+      } else {
+        this._playerMarker = L.circleMarker(
+          [this._worldPlayerPos.lat, this._worldPlayerPos.lng],
+          { radius: 6, fillColor: '#ffffff', fillOpacity: 1, color: '#cccccc', weight: 2 },
+        ).addTo(this._leafletMap)
+      }
+    }
+  }
+
+  private _destroyMap(): void {
+    if (this._leafletMap) {
+      this._leafletMap.remove()
+      this._leafletMap = null
+      this._mapMarkers = []
+      this._playerMarker = null
+    }
+  }
+
   // ─── Render helpers ───────────────────────────────────────────────────────
 
   private _renderGrimoire(): void {
@@ -2314,7 +2467,7 @@ export class UIManager {
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   private _show(name: keyof typeof this._screens): void {
-    if (name !== 'world') this._stopRadar()
+    if (name !== 'world') { this._stopRadar(); this._destroyMap() }
     if (name !== 'ritual') this._exitCameraRitual()
     for (const [key, screen] of Object.entries(this._screens)) {
       screen.classList.toggle('active', key === name)
