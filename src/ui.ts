@@ -2255,6 +2255,7 @@ export class UIManager {
     if (this._leafletMap) return
     const container = this._root.querySelector<HTMLElement>('#world-map')
     if (!container) return
+    container.classList.remove('hidden')
 
     const initialCenter: [number, number] = this._worldPlayerPos
       ? [this._worldPlayerPos.lat, this._worldPlayerPos.lng]
@@ -2314,7 +2315,16 @@ export class UIManager {
   }
 
   private _updateMapMarkers(): void {
-    if (!this._leafletMap) return
+    // If the map was destroyed but the world screen is active in map mode, recreate it
+    if (!this._leafletMap) {
+      if (this._worldViewMode === 'map' && this._screens.world.classList.contains('active')) {
+        // Ensure the map container is visible
+        const mapDiv = this._root.querySelector<HTMLElement>('#world-map')
+        if (mapDiv) mapDiv.classList.remove('hidden')
+        this._initMap()
+      }
+      return
+    }
 
     // Remove old thin-place markers and rebuild from current nearby places
     for (const marker of this._mapMarkers) {
