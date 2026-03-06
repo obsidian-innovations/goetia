@@ -709,6 +709,7 @@ export class UIManager {
   private _leafletMap: L.Map | null = null
   private _mapMarkers: L.CircleMarker[] = []
   private _playerMarker: L.CircleMarker | null = null
+  private _fixedThinPlaces: ThinPlace[] = []
   private _worldViewMode: 'map' | 'radar' = 'map'
   // Corruption overlays
   private _corruptionBarWrap: HTMLDivElement | null = null
@@ -2273,6 +2274,7 @@ export class UIManager {
     this._mapMarkers = []
     import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
       if (!this._leafletMap) return
+      this._fixedThinPlaces = FIXED_THIN_PLACES
       const displayed = this._worldNearbyPlaces.length > 0
         ? this._worldNearbyPlaces
         : FIXED_THIN_PLACES
@@ -2320,7 +2322,9 @@ export class UIManager {
     }
     this._mapMarkers = []
 
-    const places = this._worldNearbyPlaces
+    const places = this._worldNearbyPlaces.length > 0
+      ? this._worldNearbyPlaces
+      : this._fixedThinPlaces
     for (const tp of places) {
       const isCurrent = this._worldCurrentPlace?.id === tp.id
       const marker = L.circleMarker([tp.center.lat, tp.center.lng], {
