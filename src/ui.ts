@@ -360,11 +360,11 @@ const STYLE = `
   #world-radar.hidden { display: none; }
   #world-map {
     width: 100%; height: 300px; border-radius: 8px; border: 1px solid #331144;
-    overflow: hidden; position: relative;
+    overflow: hidden; position: relative; background: rgba(10,5,25,1);
   }
   #world-map.hidden { display: none; }
   #world-map .leaflet-tile-pane { filter: brightness(0.3) saturate(0.5) hue-rotate(240deg); }
-  #world-map .leaflet-container { background: rgba(8,5,18,1); }
+  #world-map.leaflet-container { background: rgba(8,5,18,1); }
   #world-view-toggle {
     padding: 0.3rem 0.9rem; border: 1px solid #331144; background: transparent;
     color: #776688; border-radius: 4px; cursor: pointer; letter-spacing: 0.1em;
@@ -2257,52 +2257,40 @@ export class UIManager {
     if (!container) return
     container.classList.remove('hidden')
 
+    // Clean residual Leaflet state from previous instances to prevent
+    // "Map container is already initialized" errors
+    delete (container as any)._leaflet_id
+    container.innerHTML = ''
+
     const initialCenter: [number, number] = this._worldPlayerPos
       ? [this._worldPlayerPos.lat, this._worldPlayerPos.lng]
       : [45.7975, 24.1522]
-    const map = L.map(container, {
-      center: initialCenter,
-      zoom: 15,
-      zoomControl: false,
-      attributionControl: false,
-    })
+
+    let map: L.Map
+    try {
+      map = L.map(container, {
+        center: initialCenter,
+        zoom: 15,
+        zoomControl: false,
+        attributionControl: false,
+      })
+    } catch {
+      // Leaflet failed to initialize — bail out
+      return
+    }
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
     }).addTo(map)
     this._leafletMap = map
 
-    // Always show all fixed Sibiu places on the map
+    // Load fixed thin places and populate initial markers
     this._mapMarkers = []
     import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
       if (!this._leafletMap) return
       this._fixedThinPlaces = FIXED_THIN_PLACES
-      const displayed = this._worldNearbyPlaces.length > 0
-        ? this._worldNearbyPlaces
-        : FIXED_THIN_PLACES
-      for (const tp of displayed) {
-        const isCurrent = this._worldCurrentPlace?.id === tp.id
-        const marker = L.circleMarker([tp.center.lat, tp.center.lng], {
-          radius: 6 + (1 - tp.veilStrength) * 4,
-          fillColor: isCurrent ? '#55ffaa' : '#aa55ff',
-          fillOpacity: 0.8,
-          color: isCurrent ? '#55ffaa' : '#7733aa',
-          weight: 2,
-        }).addTo(this._leafletMap!)
-        marker.bindPopup(
-          `<div style="color:#cbb8dd;background:#1a0a2e;padding:0.4rem 0.6rem;border-radius:4px;font-family:Georgia,serif;font-size:0.8rem;">` +
-          `<strong>${_thinPlaceLabel(tp)}</strong><br/>` +
-          `Veil: ${Math.round(tp.veilStrength * 100)}% &middot; Radius: ${tp.radiusMeters}m</div>`,
-          { className: 'goetia-popup', closeButton: false },
-        )
-        this._mapMarkers.push(marker)
-      }
-
-      if (this._worldPlayerPos) {
-        this._playerMarker = L.circleMarker(
-          [this._worldPlayerPos.lat, this._worldPlayerPos.lng],
-          { radius: 6, fillColor: '#ffffff', fillOpacity: 1, color: '#cccccc', weight: 2 },
-        ).addTo(this._leafletMap!)
-      }
+      // Trigger a marker rebuild with the latest data
+      this._updateMapMarkers()
     })
 
     // Fix tile rendering after container becomes visible — use rAF + delay
@@ -2318,9 +2306,6 @@ export class UIManager {
     // If the map was destroyed but the world screen is active in map mode, recreate it
     if (!this._leafletMap) {
       if (this._worldViewMode === 'map' && this._screens.world.classList.contains('active')) {
-        // Ensure the map container is visible
-        const mapDiv = this._root.querySelector<HTMLElement>('#world-map')
-        if (mapDiv) mapDiv.classList.remove('hidden')
         this._initMap()
       }
       return
@@ -2364,6 +2349,14 @@ export class UIManager {
         ).addTo(this._leafletMap!)
       }
       this._leafletMap.setView([this._worldPlayerPos.lat, this._worldPlayerPos.lng], 15)
+      // Ensure tiles render after panning
+      this._leafletMap.invalidateSize()
+    }
+
+    // Scroll content to top so the map is visible
+    const content = this._root.querySelector<HTMLElement>('#world-content')
+    if (content && content.scrollTop > 0) {
+      content.scrollTop = 0
     }
   }
 
