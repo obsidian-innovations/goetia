@@ -363,6 +363,17 @@ const STYLE = `
     overflow: hidden; position: relative; background: rgba(10,5,25,1);
   }
   #world-map.hidden { display: none; }
+  .map-zoom-controls {
+    position: absolute; top: 0.5rem; right: 0.5rem; z-index: 1000;
+    display: flex; flex-direction: column; gap: 0.25rem;
+  }
+  .map-zoom-btn {
+    width: 2rem; height: 2rem; border: 1px solid #442255; background: rgba(15,5,30,0.85);
+    color: #bb88ee; font-family: inherit; font-size: 1.1rem; cursor: pointer;
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    line-height: 1; padding: 0;
+  }
+  .map-zoom-btn:hover { border-color: #7733aa; color: #cc88ff; }
   #world-map .leaflet-tile-pane { filter: brightness(0.5) saturate(0.5) hue-rotate(240deg); }
   #world-map.leaflet-container { background: rgba(8,5,18,1); }
   #world-view-toggle {
@@ -2293,6 +2304,18 @@ export class UIManager {
       }).addTo(map)
       this._leafletMap = map
 
+      // Add zoom control buttons
+      const zoomControls = document.createElement('div')
+      zoomControls.className = 'map-zoom-controls'
+      zoomControls.innerHTML = '<button class="map-zoom-btn" data-zoom="in">+</button><button class="map-zoom-btn" data-zoom="out">−</button>'
+      container.appendChild(zoomControls)
+      zoomControls.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest<HTMLElement>('.map-zoom-btn')
+        if (!btn || !this._leafletMap) return
+        if (btn.dataset.zoom === 'in') this._leafletMap.zoomIn()
+        else this._leafletMap.zoomOut()
+      })
+
       // Load fixed thin places and populate initial markers
       this._mapMarkers = []
       import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
@@ -2355,7 +2378,7 @@ export class UIManager {
           { radius: 6, fillColor: '#ffffff', fillOpacity: 1, color: '#cccccc', weight: 2 },
         ).addTo(this._leafletMap!)
       }
-      this._leafletMap.setView([this._worldPlayerPos.lat, this._worldPlayerPos.lng], 15)
+      this._leafletMap.setView([this._worldPlayerPos.lat, this._worldPlayerPos.lng], this._leafletMap.getZoom())
       // Ensure tiles render after panning
       this._leafletMap.invalidateSize()
     }
