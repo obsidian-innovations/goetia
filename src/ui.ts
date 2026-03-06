@@ -709,6 +709,7 @@ export class UIManager {
   private _leafletMap: L.Map | null = null
   private _mapMarkers: L.CircleMarker[] = []
   private _playerMarker: L.CircleMarker | null = null
+  private _fixedThinPlaces: ThinPlace[] = []
   private _worldViewMode: 'map' | 'radar' = 'map'
   // Corruption overlays
   private _corruptionBarWrap: HTMLDivElement | null = null
@@ -2254,6 +2255,7 @@ export class UIManager {
     if (this._leafletMap) return
     const container = this._root.querySelector<HTMLElement>('#world-map')
     if (!container) return
+    container.classList.remove('hidden')
 
     const initialCenter: [number, number] = this._worldPlayerPos
       ? [this._worldPlayerPos.lat, this._worldPlayerPos.lng]
@@ -2273,6 +2275,7 @@ export class UIManager {
     this._mapMarkers = []
     import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
       if (!this._leafletMap) return
+      this._fixedThinPlaces = FIXED_THIN_PLACES
       const displayed = this._worldNearbyPlaces.length > 0
         ? this._worldNearbyPlaces
         : FIXED_THIN_PLACES
@@ -2312,7 +2315,16 @@ export class UIManager {
   }
 
   private _updateMapMarkers(): void {
-    if (!this._leafletMap) return
+    // If the map was destroyed but the world screen is active in map mode, recreate it
+    if (!this._leafletMap) {
+      if (this._worldViewMode === 'map' && this._screens.world.classList.contains('active')) {
+        // Ensure the map container is visible
+        const mapDiv = this._root.querySelector<HTMLElement>('#world-map')
+        if (mapDiv) mapDiv.classList.remove('hidden')
+        this._initMap()
+      }
+      return
+    }
 
     // Remove old thin-place markers and rebuild from current nearby places
     for (const marker of this._mapMarkers) {
@@ -2320,7 +2332,9 @@ export class UIManager {
     }
     this._mapMarkers = []
 
-    const places = this._worldNearbyPlaces
+    const places = this._worldNearbyPlaces.length > 0
+      ? this._worldNearbyPlaces
+      : this._fixedThinPlaces
     for (const tp of places) {
       const isCurrent = this._worldCurrentPlace?.id === tp.id
       const marker = L.circleMarker([tp.center.lat, tp.center.lng], {
