@@ -359,11 +359,11 @@ const STYLE = `
   #world-radar { width: 280px; height: 280px; border-radius: 50%; background: rgba(10,5,20,0.8); border: 1px solid #331144; }
   #world-radar.hidden { display: none; }
   #world-map {
-    width: 100%; height: 300px; border-radius: 8px; border: 1px solid #331144;
+    width: 100%; height: 300px; flex-shrink: 0; border-radius: 8px; border: 1px solid #331144;
     overflow: hidden; position: relative; background: rgba(10,5,25,1);
   }
   #world-map.hidden { display: none; }
-  #world-map .leaflet-tile-pane { filter: brightness(0.3) saturate(0.5) hue-rotate(240deg); }
+  #world-map .leaflet-tile-pane { filter: brightness(0.5) saturate(0.5) hue-rotate(240deg); }
   #world-map.leaflet-container { background: rgba(8,5,18,1); }
   #world-view-toggle {
     padding: 0.3rem 0.9rem; border: 1px solid #331144; background: transparent;
@@ -2262,43 +2262,50 @@ export class UIManager {
     delete (container as any)._leaflet_id
     container.innerHTML = ''
 
-    const initialCenter: [number, number] = this._worldPlayerPos
-      ? [this._worldPlayerPos.lat, this._worldPlayerPos.lng]
-      : [45.7975, 24.1522]
-
-    let map: L.Map
-    try {
-      map = L.map(container, {
-        center: initialCenter,
-        zoom: 15,
-        zoomControl: false,
-        attributionControl: false,
-      })
-    } catch {
-      // Leaflet failed to initialize — bail out
-      return
-    }
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-    }).addTo(map)
-    this._leafletMap = map
-
-    // Load fixed thin places and populate initial markers
-    this._mapMarkers = []
-    import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
-      if (!this._leafletMap) return
-      this._fixedThinPlaces = FIXED_THIN_PLACES
-      // Trigger a marker rebuild with the latest data
-      this._updateMapMarkers()
-    })
-
-    // Fix tile rendering after container becomes visible — use rAF + delay
-    // to ensure the screen's CSS transition from display:none is complete
+    // Defer map creation to next frame so the container has layout dimensions
+    // (the screen transitions from display:none → display:flex and the browser
+    // needs a frame to compute the container's width/height)
     requestAnimationFrame(() => {
-      setTimeout(() => {
-        if (this._leafletMap) this._leafletMap.invalidateSize()
-      }, 150)
+      // Guard: another call may have created the map while we waited
+      if (this._leafletMap) return
+      // Guard: container must have non-zero dimensions for Leaflet
+      if (container.clientWidth === 0 || container.clientHeight === 0) return
+
+      const initialCenter: [number, number] = this._worldPlayerPos
+        ? [this._worldPlayerPos.lat, this._worldPlayerPos.lng]
+        : [45.7975, 24.1522]
+
+      let map: L.Map
+      try {
+        map = L.map(container, {
+          center: initialCenter,
+          zoom: 15,
+          zoomControl: false,
+          attributionControl: false,
+        })
+      } catch (e) {
+        console.error('[Goetia] Leaflet map init failed:', e)
+        return
+      }
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map)
+      this._leafletMap = map
+
+      // Load fixed thin places and populate initial markers
+      this._mapMarkers = []
+      import('@engine/world/FixedThinPlaces').then(({ FIXED_THIN_PLACES }) => {
+        if (!this._leafletMap) return
+        this._fixedThinPlaces = FIXED_THIN_PLACES
+        this._updateMapMarkers()
+      })
+
+      // Ensure tiles render correctly — staggered invalidateSize calls
+      // to handle varying layout timing across devices
+      map.invalidateSize()
+      setTimeout(() => { if (this._leafletMap) this._leafletMap.invalidateSize() }, 100)
+      setTimeout(() => { if (this._leafletMap) this._leafletMap.invalidateSize() }, 300)
     })
   }
 
