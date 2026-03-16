@@ -104,6 +104,17 @@ export class GrimoireDB {
 
   saveSigil(sigil: Sigil): void {
     this.load()
+    this._upsertSigil(sigil)
+    this.persist()
+  }
+
+  saveSigilsBatch(sigils: Sigil[]): void {
+    this.load()
+    for (const sigil of sigils) this._upsertSigil(sigil)
+    this.persist()
+  }
+
+  private _upsertSigil(sigil: Sigil): void {
     let page = this.pages.find(p => p.demonId === sigil.demonId)
     if (!page) {
       page = { demonId: sigil.demonId, sigils: [] }
@@ -115,7 +126,6 @@ export class GrimoireDB {
     } else {
       page.sigils.push(sigil)
     }
-    this.persist()
   }
 
   updateSigilStatus(sigilId: string, newStatus: SigilStatus): void {

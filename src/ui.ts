@@ -20,6 +20,7 @@ import type { CovenState } from '@engine/social/CovenEngine'
 import { startCamera, stopCamera } from '@services/camera'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
+import { DECAYABLE_STATUSES } from '@engine/sigil/DecayEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
@@ -2524,8 +2525,8 @@ export class UIManager {
     meta.appendChild(integrity)
     meta.appendChild(status)
 
-    // Decay bar for charged/awakened sigils
-    if ((sigil.status === 'charged' || sigil.status === 'awakened') && decayState) {
+    // Decay bar for decayable sigils
+    if (DECAYABLE_STATUSES.has(sigil.status) && decayState) {
       const barBg = el('div', 's-decay-bar')
       const fill = el('div', 's-decay-fill')
       fill.style.width = `${intPct}%`

@@ -28,6 +28,7 @@ import { getBestSigil } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
+import type { Sigil } from '@engine/sigil/Types'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -506,7 +507,7 @@ async function init(): Promise<void> {
     decayTickCounter++
     if (decayTickCounter >= 60) {
       decayTickCounter = 0
-      const allSigils: import('@engine/sigil/Types').Sigil[] = []
+      const allSigils: Sigil[] = []
       for (const page of useGrimoireStore.getState().pages) {
         for (const sigil of page.sigils) allSigils.push(sigil)
       }

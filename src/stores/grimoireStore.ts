@@ -54,11 +54,10 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   },
 
   applyDecayBatch(updatedSigils: Sigil[], updatedDecayStates: Record<string, DecayState>) {
-    // Persist each decayed sigil
-    for (const sigil of updatedSigils) {
-      grimoireDB.saveSigil(sigil)
+    // Batch-persist all decayed sigils in a single load/persist cycle
+    if (updatedSigils.length > 0) {
+      grimoireDB.saveSigilsBatch(updatedSigils)
     }
-    // Persist all decay states in one write
     grimoireDB.saveAllDecayStates(updatedDecayStates)
     set({ pages: grimoireDB.getAll(), decayStates: updatedDecayStates })
   },

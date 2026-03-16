@@ -1,4 +1,5 @@
-import type { Sigil, SigilVisualState } from './Types'
+import type { Sigil } from './Types'
+import { computeVisualState } from './SigilComposer'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ const REBIND_THRESHOLD = 0.30
 const ANCIENT_REBIND_COUNT = 3
 
 /** Statuses that are subject to decay. */
-const DECAYABLE_STATUSES = new Set(['charged', 'awakened'])
+export const DECAYABLE_STATUSES = new Set<string>(['charged', 'awakened'])
 
 // ─── Factory ───────────────────────────────────────────────────────────────
 
@@ -109,17 +110,13 @@ export function applyDecay(sigil: Sigil, result: DecayResult): Sigil {
     ...sigil,
     overallIntegrity: result.newIntegrity,
     visualState,
-    rebindCount: sigil.rebindCount,
     isAncient: result.isAncient,
   }
 }
 
-function getDecayedVisualState(integrity: number, isAncient: boolean): SigilVisualState {
-  if (isAncient) return 'healthy' // ancient sigils always show as healthy
-  if (integrity >= 0.85) return 'charged'
-  if (integrity >= 0.60) return 'healthy'
-  if (integrity >= 0.30) return 'unstable'
-  return 'corrupted'
+function getDecayedVisualState(integrity: number, isAncient: boolean) {
+  if (isAncient) return 'healthy' as const // ancient sigils always show as healthy
+  return computeVisualState(integrity)
 }
 
 // ─── Rebinding ─────────────────────────────────────────────────────────────
