@@ -25,8 +25,13 @@ import { createHoldWindowState, isCollapsed } from '@engine/charging/HoldWindow'
 import { createVesselState } from '@engine/corruption/VesselState'
 import { attemptPurification } from '@engine/corruption/PurificationEngine'
 import { getBestSigil } from '@engine/grimoire'
+import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
+import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 
 const lifecycleManager = new SigilLifecycleManager()
+
+/** Current temporal modifiers — recomputed each tick. */
+let currentTemporalMods: TemporalModifiers = getTemporalModifiers(Date.now())
 
 /** Hold window states for fully charged sigils, keyed by sigilId */
 const holdWindows = new Map<string, import('@engine/charging/HoldWindow').HoldWindowState>()
@@ -138,8 +143,8 @@ async function init(): Promise<void> {
           const demand = generateDemand(demon, completedSigil.overallIntegrity)
           useChargingStore.getState().addDemand(demon.id, demand)
 
-          // Casting a sigil adds corruption proportional to the demon's rank
-          const castAmount = getCorruptionAmount('sigil_cast', demon.rank)
+          // Casting a sigil adds corruption proportional to the demon's rank (scaled by temporal modifiers)
+          const castAmount = getCorruptionAmount('sigil_cast', demon.rank) * currentTemporalMods.corruptionMultiplier
           useCorruptionStore.getState().addCorruption({ type: 'sigil_cast', amount: castAmount, timestamp: Date.now() })
 
           ui.showCharging(demon.name)
@@ -162,7 +167,7 @@ async function init(): Promise<void> {
       if (demonId) {
         try {
           const demon = getDemon(demonId)
-          const amount = getCorruptionAmount('demand_ignored', demon.rank)
+          const amount = getCorruptionAmount('demand_ignored', demon.rank) * currentTemporalMods.corruptionMultiplier
           useCorruptionStore.getState().addCorruption({ type: 'demand_ignored', amount, timestamp: Date.now() })
         } catch { /* demon not found */ }
       }
@@ -421,7 +426,13 @@ async function init(): Promise<void> {
   // Runs every second to advance charge progress and update the UI
   const _chargingTick = setInterval(() => {
     const now = Date.now()
-    const chargeMultiplier = useWorldStore.getState().getChargeMultiplier()
+
+    // Compute temporal modifiers (moon phase, witching hour, etc.)
+    currentTemporalMods = getTemporalModifiers(now)
+    ui.updateTemporalState(currentTemporalMods)
+
+    const worldChargeMultiplier = useWorldStore.getState().getChargeMultiplier()
+    const chargeMultiplier = worldChargeMultiplier * currentTemporalMods.chargeMultiplier
     useChargingStore.getState().tickAll(now, chargeMultiplier)
     // Tick world decay as well
     useWorldStore.getState().tick(now)

@@ -18,6 +18,8 @@ import type { ClashResult } from '@engine/pvp/ClashResolver'
 import type { Hex } from '@engine/pvp/HexSystem'
 import type { CovenState } from '@engine/social/CovenEngine'
 import { startCamera, stopCamera } from '@services/camera'
+import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
+import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -126,6 +128,11 @@ const STYLE = `
   }
   #camera-btn:hover { border-color: #44aa77; color: #99ddbb; }
   #demon-name-label { text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; }
+  #moon-indicator {
+    font-size: 1.1rem; opacity: 0.6; transition: opacity 0.5s, text-shadow 0.5s;
+    margin-left: 0.3rem;
+  }
+  #moon-indicator.witching { opacity: 1.0; text-shadow: 0 0 6px #bb44ff, 0 0 12px #6611aa; }
   #ritual-toolbar {
     padding: 0.75rem 1rem 1.25rem; display: flex; gap: 0.5rem; justify-content: safe center; align-items: center;
     background: linear-gradient(to top, rgba(8,7,15,0.85) 0%, transparent 100%);
@@ -732,6 +739,8 @@ export class UIManager {
   private _cameraStream: MediaStream | null = null
   private _cameraVideo: HTMLVideoElement | null = null
   private _isCameraRitual = false
+  // Temporal indicator
+  private _moonIndicator: HTMLDivElement | null = null
 
   constructor() {
     this._injectStyles()
@@ -1196,6 +1205,14 @@ export class UIManager {
     this._corruptionBar.className = stage !== 'clean' ? stage : ''
   }
 
+  /** Update the moon phase indicator and witching-hour styling. */
+  updateTemporalState(modifiers: TemporalModifiers): void {
+    if (this._moonIndicator) {
+      this._moonIndicator.textContent = getMoonSymbol(modifiers.moonPhase.phase)
+      this._moonIndicator.classList.toggle('witching', modifiers.isWitchingHour)
+    }
+  }
+
   /** Flash a whisper message and auto-fade after 4 s. */
   showWhisper(text: string, intensity: WhisperIntensity = 'low'): void {
     const overlay = this._whisperOverlay
@@ -1360,6 +1377,11 @@ export class UIManager {
 
     const nameLabel = el('div', '', 'demon-name-label')
     header.appendChild(nameLabel)
+
+    // Moon phase indicator (atmospheric — no numbers, just the symbol)
+    const moonInd = el('div', '', 'moon-indicator')
+    this._moonIndicator = moonInd
+    header.appendChild(moonInd)
 
     // Spacer to push camera button to the right
     const headerSpacer = el('div')
