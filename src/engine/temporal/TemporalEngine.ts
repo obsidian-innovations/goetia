@@ -75,17 +75,16 @@ function getPhaseNameFromFraction(fraction: number): MoonPhaseName {
 // ─── Witching Hour ─────────────────────────────────────────────────────────
 
 /** Returns true if the local time is between midnight and 3am. */
-export function isWitchingHour(timestamp: number): boolean {
-  const date = new Date(timestamp)
-  const hour = date.getHours()
+export function isWitchingHour(timestamp: number | Date): boolean {
+  const hour = (timestamp instanceof Date ? timestamp : new Date(timestamp)).getHours()
   return hour >= 0 && hour < 3
 }
 
 // ─── Solstice / Equinox ────────────────────────────────────────────────────
 
 /** Returns true if the date falls on a solstice (Jun 20-22 or Dec 20-22). */
-export function isSolstice(timestamp: number): boolean {
-  const date = new Date(timestamp)
+export function isSolstice(timestamp: number | Date): boolean {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp)
   const month = date.getMonth() // 0-indexed
   const day = date.getDate()
 
@@ -98,8 +97,8 @@ export function isSolstice(timestamp: number): boolean {
 }
 
 /** Returns true if the date falls on an equinox (Mar 19-21 or Sep 22-24). */
-export function isEquinox(timestamp: number): boolean {
-  const date = new Date(timestamp)
+export function isEquinox(timestamp: number | Date): boolean {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp)
   const month = date.getMonth()
   const day = date.getDate()
 
@@ -116,9 +115,10 @@ export function isEquinox(timestamp: number): boolean {
 /** Compute all temporal modifiers for a given timestamp. Pure function. */
 export function getTemporalModifiers(timestamp: number): TemporalModifiers {
   const moonPhase = getMoonPhase(timestamp)
-  const witching = isWitchingHour(timestamp)
-  const solstice = isSolstice(timestamp)
-  const equinox = isEquinox(timestamp)
+  const date = new Date(timestamp)
+  const witching = isWitchingHour(date)
+  const solstice = isSolstice(date)
+  const equinox = isEquinox(date)
 
   let chargeMultiplier = 1.0
   let corruptionMultiplier = 1.0

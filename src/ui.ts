@@ -741,6 +741,8 @@ export class UIManager {
   private _isCameraRitual = false
   // Temporal indicator
   private _moonIndicator: HTMLDivElement | null = null
+  private _lastMoonPhase: string = ''
+  private _lastWitching: boolean = false
 
   constructor() {
     this._injectStyles()
@@ -1207,9 +1209,15 @@ export class UIManager {
 
   /** Update the moon phase indicator and witching-hour styling. */
   updateTemporalState(modifiers: TemporalModifiers): void {
-    if (this._moonIndicator) {
-      this._moonIndicator.textContent = getMoonSymbol(modifiers.moonPhase.phase)
+    if (!this._moonIndicator) return
+    const phase = modifiers.moonPhase.phase
+    if (phase !== this._lastMoonPhase) {
+      this._moonIndicator.textContent = getMoonSymbol(phase)
+      this._lastMoonPhase = phase
+    }
+    if (modifiers.isWitchingHour !== this._lastWitching) {
       this._moonIndicator.classList.toggle('witching', modifiers.isWitchingHour)
+      this._lastWitching = modifiers.isWitchingHour
     }
   }
 
