@@ -1,5 +1,6 @@
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { ResearchState } from '@engine/research/ResearchEngine'
+import type { DecayState } from '@engine/sigil/DecayEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ export type GrimoirePage = {
 interface GrimoireData {
   pages: GrimoirePage[]
   research: Record<string, ResearchState>
+  decay?: Record<string, DecayState>
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -35,6 +37,7 @@ const STORAGE_KEY = 'goetia:grimoire'
 export class GrimoireDB {
   private pages: GrimoirePage[] = []
   private research: Record<string, ResearchState> = {}
+  private decay: Record<string, DecayState> = {}
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -44,6 +47,7 @@ export class GrimoireDB {
       if (!raw) {
         this.pages = []
         this.research = {}
+        this.decay = {}
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -51,19 +55,22 @@ export class GrimoireDB {
       if (Array.isArray(parsed)) {
         this.pages = parsed
         this.research = {}
+        this.decay = {}
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
+        this.decay = parsed.decay ?? {}
       }
     } catch {
       this.pages = []
       this.research = {}
+      this.decay = {}
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -146,6 +153,33 @@ export class GrimoireDB {
   clearAll(): void {
     this.pages = []
     this.research = {}
+    this.decay = {}
+    this.persist()
+  }
+
+  // ─── Decay reads ─────────────────────────────────────────────────────────
+
+  getDecayState(sigilId: string): DecayState | null {
+    this.load()
+    return this.decay[sigilId] ?? null
+  }
+
+  getAllDecayStates(): Record<string, DecayState> {
+    this.load()
+    return { ...this.decay }
+  }
+
+  // ─── Decay writes ────────────────────────────────────────────────────────
+
+  saveDecayState(state: DecayState): void {
+    this.load()
+    this.decay[state.sigilId] = state
+    this.persist()
+  }
+
+  saveAllDecayStates(states: Record<string, DecayState>): void {
+    this.load()
+    this.decay = { ...states }
     this.persist()
   }
 

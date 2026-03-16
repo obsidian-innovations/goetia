@@ -27,6 +27,7 @@ import { attemptPurification } from '@engine/corruption/PurificationEngine'
 import { getBestSigil } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
+import { processDecayBatch } from '@engine/sigil/DecayEngine'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -35,6 +36,9 @@ let currentTemporalMods: TemporalModifiers = getTemporalModifiers(Date.now())
 
 /** Hold window states for fully charged sigils, keyed by sigilId */
 const holdWindows = new Map<string, import('@engine/charging/HoldWindow').HoldWindowState>()
+
+/** Counter for decay processing — runs every 60 ticks (60 seconds). */
+let decayTickCounter = 0
 
 /** Look up a sigil and its demon from the grimoire by sigilId. */
 function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Types').Sigil; demon: import('@engine/sigil/Types').Demon } | null {
@@ -495,6 +499,26 @@ async function init(): Promise<void> {
         // Sigil has fully destabilised — mark as spent
         useGrimoireStore.getState().updateSigilStatus(sigilId, 'spent')
         holdWindows.delete(sigilId)
+      }
+    }
+
+    // ── Sigil decay (every 60 seconds) ────────────────────────────────────
+    decayTickCounter++
+    if (decayTickCounter >= 60) {
+      decayTickCounter = 0
+      const allSigils: import('@engine/sigil/Types').Sigil[] = []
+      for (const page of useGrimoireStore.getState().pages) {
+        for (const sigil of page.sigils) allSigils.push(sigil)
+      }
+      const decayStates = useGrimoireStore.getState().decayStates
+      const { updatedSigils, updatedDecayStates } = processDecayBatch(
+        allSigils, decayStates, now, currentTemporalMods,
+      )
+      if (updatedSigils.length > 0) {
+        useGrimoireStore.getState().applyDecayBatch(updatedSigils, updatedDecayStates)
+      } else if (Object.keys(updatedDecayStates).length !== Object.keys(decayStates).length) {
+        // New decay states created (no sigils decayed yet, but states need persisting)
+        useGrimoireStore.getState().applyDecayBatch([], updatedDecayStates)
       }
     }
 

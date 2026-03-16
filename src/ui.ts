@@ -20,6 +20,7 @@ import type { CovenState } from '@engine/social/CovenEngine'
 import { startCamera, stopCamera } from '@services/camera'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
+import type { DecayState } from '@engine/sigil/DecayEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -240,6 +241,29 @@ const STYLE = `
   .sigil-entry .s-name { font-size: 0.8rem; color: #cbb8dd; }
   .sigil-entry .s-integrity { font-size: 0.7rem; color: #776688; }
   .sigil-entry .s-status { font-size: 0.65rem; color: #665577; text-transform: uppercase; letter-spacing: 0.08em; }
+  .sigil-entry .s-decay-bar {
+    height: 3px; border-radius: 2px; margin-top: 2px; overflow: hidden;
+    background: rgba(40,10,60,0.6); position: relative;
+  }
+  .sigil-entry .s-decay-fill {
+    height: 100%; border-radius: 2px; transition: width 0.5s;
+    background: linear-gradient(to right, #5511aa, #aa55ff);
+  }
+  .sigil-entry .s-decay-fill.fading {
+    background: linear-gradient(to right, #773300, #cc6600);
+  }
+  .sigil-entry .s-decay-fill.critical {
+    background: linear-gradient(to right, #771111, #cc3333);
+  }
+  .sigil-entry .s-strata {
+    display: flex; gap: 2px; margin-top: 2px;
+  }
+  .sigil-entry .s-strata-mark {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: #6633aa; opacity: 0.6;
+  }
+  .sigil-entry.ancient { border-color: #336633; }
+  .sigil-entry.ancient .s-strata-mark { background: #44aa44; opacity: 0.8; }
   #grimoire-empty { text-align: center; color: #443355; font-size: 0.85rem; margin-top: 3rem; }
 
   /* ── Charging ── */
@@ -2434,6 +2458,7 @@ export class UIManager {
   private _renderGrimoire(): void {
     useGrimoireStore.getState().load()
     const pages = useGrimoireStore.getState().pages
+    const decayStates = useGrimoireStore.getState().decayStates
     const research = useResearchStore.getState().researching
     const demonMap = new Map(listDemons().map(d => [d.id, d]))
     const content = this._root.querySelector<HTMLElement>('#grimoire-content')
@@ -2467,7 +2492,8 @@ export class UIManager {
       }
 
       for (const sigil of page.sigils) {
-        section.appendChild(this._sigilEntry(sigil, demon?.name ?? page.demonId, rs))
+        const decay = decayStates[sigil.id] ?? null
+        section.appendChild(this._sigilEntry(sigil, demon?.name ?? page.demonId, rs, decay))
       }
       content.appendChild(section)
     }
@@ -2477,8 +2503,10 @@ export class UIManager {
     sigil: Sigil,
     demonName: string,
     researchState: ResearchState | null,
+    decayState?: DecayState | null,
   ): HTMLDivElement {
     const entry = el('div', 'sigil-entry')
+    if (sigil.isAncient) entry.classList.add('ancient')
 
     const dot = el('div', 's-state')
     dot.style.backgroundColor = VISUAL_STATE_COLORS[sigil.visualState]
@@ -2487,13 +2515,36 @@ export class UIManager {
     const name = el('div', 's-name')
     name.textContent = new Date(sigil.createdAt).toLocaleDateString()
     const integrity = el('div', 's-integrity')
-    integrity.textContent = `Integrity ${Math.round(sigil.overallIntegrity * 100)}%`
+    const intPct = Math.round(sigil.overallIntegrity * 100)
+    integrity.textContent = sigil.isAncient ? `Ancient \u00b7 ${intPct}%` : `Integrity ${intPct}%`
     const status = el('div', 's-status')
     status.textContent = sigil.status
 
     meta.appendChild(name)
     meta.appendChild(integrity)
     meta.appendChild(status)
+
+    // Decay bar for charged/awakened sigils
+    if ((sigil.status === 'charged' || sigil.status === 'awakened') && decayState) {
+      const barBg = el('div', 's-decay-bar')
+      const fill = el('div', 's-decay-fill')
+      fill.style.width = `${intPct}%`
+      if (intPct < 30) fill.classList.add('critical')
+      else if (intPct < 60) fill.classList.add('fading')
+      barBg.appendChild(fill)
+      meta.appendChild(barBg)
+    }
+
+    // Strata marks (one dot per rebinding)
+    const rebindCount = sigil.rebindCount ?? decayState?.rebindCount ?? 0
+    if (rebindCount > 0) {
+      const strata = el('div', 's-strata')
+      for (let i = 0; i < rebindCount; i++) {
+        strata.appendChild(el('div', 's-strata-mark'))
+      }
+      meta.appendChild(strata)
+    }
+
     entry.appendChild(dot)
     entry.appendChild(meta)
 
