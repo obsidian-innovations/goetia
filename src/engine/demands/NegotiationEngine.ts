@@ -162,7 +162,8 @@ export function counterOffer(offer: DemonOffer, now: number): CounterResult {
     type: offer.benefit.type,
     value: Math.round(offer.benefit.value * COUNTER_BENEFIT_REDUCTION * 100) / 100,
   }
-  const counterCostType = COST_TYPES.find(t => t !== offer.cost.type) ?? offer.cost.type
+  const otherCosts = COST_TYPES.filter(t => t !== offer.cost.type)
+  const counterCostType = otherCosts[Math.floor(Math.random() * otherCosts.length)]
 
   const newOffer: DemonOffer = {
     id: `counter-${offer.id}-${now}`,

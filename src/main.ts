@@ -29,7 +29,8 @@ import { getVesselPerspective, generateVesselWhisper } from '@engine/corruption/
 import type { PermanentScar } from '@engine/corruption/PurificationEngine'
 import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire, findResonances, calculateCorruptionSpread, tickFeral, generateFeralWhisper, captureShadowEntries, fadeShadowBatch } from '@engine/grimoire'
 import { generateOffer, isOfferExpired } from '@engine/demands/NegotiationEngine'
-import { evolveGlyph } from '@engine/sigil/GlyphEvolution'
+import { createHistory, evolveGlyph, EVOLUTION_THRESHOLD } from '@engine/sigil/GlyphEvolution'
+import type { GlyphId } from '@engine/sigil/Types'
 import { getGlyphTemplate } from '@engine/sigil/GlyphLibrary'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
@@ -589,7 +590,7 @@ async function init(): Promise<void> {
         const history = gStore.glyphHistory
         const glyphId = lastGlyph.glyphId as string
         if (!history[glyphId]) {
-          gStore.saveGlyphHistory({ ...history, [glyphId]: { glyphId: lastGlyph.glyphId, drawCount: 0, accumulatedPaths: [], evolvedCanonicalPath: null, divergenceFromOriginal: 0 } })
+          gStore.saveGlyphHistory({ ...history, [glyphId]: createHistory(lastGlyph.glyphId) })
         }
       }
     } else {
@@ -794,7 +795,9 @@ async function init(): Promise<void> {
         if (gState.shadowEntries.length > 0) {
           const { entries, changed } = fadeShadowBatch(gState.shadowEntries, now)
           if (changed) {
-            gState.saveShadowEntries(entries)
+            // Remove fully faded entries to prevent unbounded growth
+            const visible = entries.filter(e => e.fadeProgress < 1.0)
+            gState.saveShadowEntries(visible)
           }
         }
       }
@@ -806,9 +809,9 @@ async function init(): Promise<void> {
         let historyChanged = false
         const updatedHistory = { ...history }
         for (const [glyphId, h] of Object.entries(history)) {
-          if (h.drawCount >= 50 && !h.evolvedCanonicalPath) {
+          if (h.drawCount >= EVOLUTION_THRESHOLD && !h.evolvedCanonicalPath) {
             try {
-              const template = getGlyphTemplate(glyphId as import('@engine/sigil/Types').GlyphId)
+              const template = getGlyphTemplate(glyphId as GlyphId)
               const evolved = evolveGlyph(h, template.canonicalPath)
               if (evolved !== h) {
                 updatedHistory[glyphId] = evolved

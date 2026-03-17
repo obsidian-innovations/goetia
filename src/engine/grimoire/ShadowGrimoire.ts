@@ -3,7 +3,7 @@
 // state, their active sigils are captured as shadow entries that slowly fade
 // over 4 real weeks, providing demon-perspective lore.
 
-import type { Demon, Sigil } from '@engine/sigil/Types'
+import type { Demon, DemonRank, Sigil } from '@engine/sigil/Types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ const FADE_DURATION_MS = 4 * 7 * 24 * 60 * 60 * 1000
 
 // ─── Lore pools ──────────────────────────────────────────────────────────────
 
-const RANK_LORE: Record<string, string[]> = {
+const RANK_LORE: Record<DemonRank, string[]> = {
   King: [
     'I wore this crown willingly. The mortal thought it theirs.',
     'Through their fingers, I touched the living world again.',
