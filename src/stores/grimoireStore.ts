@@ -5,6 +5,7 @@ import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { DecayState } from '@engine/sigil/DecayEngine'
 import { processInteraction } from '@engine/familiarity/FamiliarityEngine'
 import type { FamiliarityState, FamiliarityEventType } from '@engine/familiarity/FamiliarityEngine'
+import type { DreamState } from '@engine/sigil/DreamEngine'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
@@ -12,6 +13,7 @@ interface GrimoireState {
   pages: GrimoirePage[]
   decayStates: Record<string, DecayState>
   familiarityStates: Record<string, FamiliarityState>
+  dreamStates: Record<string, DreamState>
   isLoaded: boolean
 }
 
@@ -24,6 +26,8 @@ interface GrimoireActions {
   applyDecayBatch: (updatedSigils: Sigil[], updatedDecayStates: Record<string, DecayState>) => void
   /** Record a familiarity event for a demon (atomic read-modify-write). */
   recordFamiliarity: (demonId: string, eventType: FamiliarityEventType) => void
+  /** Batch-update dreamed sigils and their dream states. */
+  applyDreamBatch: (updatedSigils: Sigil[], updatedDreamStates: Record<string, DreamState>) => void
 }
 
 type GrimoireStore = GrimoireState & GrimoireActions
@@ -35,6 +39,7 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   pages: [],
   decayStates: {},
   familiarityStates: {},
+  dreamStates: {},
   isLoaded: false,
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -43,7 +48,8 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
     const pages = grimoireDB.getAll()
     const decayStates = grimoireDB.getAllDecayStates()
     const familiarityStates = grimoireDB.getAllFamiliarity()
-    set({ pages, decayStates, familiarityStates, isLoaded: true })
+    const dreamStates = grimoireDB.getAllDreamStates()
+    set({ pages, decayStates, familiarityStates, dreamStates, isLoaded: true })
   },
 
   saveSigil(sigil: Sigil) {
@@ -70,5 +76,10 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
     const { updatedState, allStates } = processInteraction(get().familiarityStates, demonId, eventType, Date.now())
     grimoireDB.saveFamiliarity(updatedState)
     set({ familiarityStates: allStates })
+  },
+
+  applyDreamBatch(updatedSigils: Sigil[], updatedDreamStates: Record<string, DreamState>) {
+    const pages = grimoireDB.saveDreamBatch(updatedSigils, updatedDreamStates)
+    set({ pages, dreamStates: updatedDreamStates })
   },
 }))

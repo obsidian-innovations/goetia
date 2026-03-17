@@ -2,6 +2,7 @@ import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { ResearchState } from '@engine/research/ResearchEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
 import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
+import type { DreamState } from '@engine/sigil/DreamEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ interface GrimoireData {
   research: Record<string, ResearchState>
   decay?: Record<string, DecayState>
   familiarity?: Record<string, FamiliarityState>
+  dream?: Record<string, DreamState>
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -41,6 +43,7 @@ export class GrimoireDB {
   private research: Record<string, ResearchState> = {}
   private decay: Record<string, DecayState> = {}
   private familiarity: Record<string, FamiliarityState> = {}
+  private dream: Record<string, DreamState> = {}
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -52,6 +55,7 @@ export class GrimoireDB {
         this.research = {}
         this.decay = {}
         this.familiarity = {}
+        this.dream = {}
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -61,23 +65,26 @@ export class GrimoireDB {
         this.research = {}
         this.decay = {}
         this.familiarity = {}
+        this.dream = {}
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
         this.decay = parsed.decay ?? {}
         this.familiarity = parsed.familiarity ?? {}
+        this.dream = parsed.dream ?? {}
       }
     } catch {
       this.pages = []
       this.research = {}
       this.decay = {}
       this.familiarity = {}
+      this.dream = {}
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -181,6 +188,7 @@ export class GrimoireDB {
     this.research = {}
     this.decay = {}
     this.familiarity = {}
+    this.dream = {}
     this.persist()
   }
 
@@ -228,6 +236,29 @@ export class GrimoireDB {
     this.load()
     this.familiarity[state.demonId] = state
     this.persist()
+  }
+
+  // ─── Dream reads ────────────────────────────────────────────────────────
+
+  getDreamState(sigilId: string): DreamState | null {
+    this.load()
+    return this.dream[sigilId] ?? null
+  }
+
+  getAllDreamStates(): Record<string, DreamState> {
+    this.load()
+    return { ...this.dream }
+  }
+
+  // ─── Dream writes ───────────────────────────────────────────────────────
+
+  /** Atomically persist sigils and dream states in a single load/persist cycle. */
+  saveDreamBatch(sigils: Sigil[], dreamStates: Record<string, DreamState>): GrimoirePage[] {
+    this.load()
+    for (const sigil of sigils) this._upsertSigil(sigil)
+    this.dream = { ...dreamStates }
+    this.persist()
+    return this.pages
   }
 
   // ─── Research reads ───────────────────────────────────────────────────────

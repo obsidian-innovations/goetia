@@ -28,6 +28,7 @@ import { getBestSigil } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
+import { processDreamBatch } from '@engine/sigil/DreamEngine'
 import type { Sigil } from '@engine/sigil/Types'
 
 const lifecycleManager = new SigilLifecycleManager()
@@ -38,7 +39,7 @@ let currentTemporalMods: TemporalModifiers = getTemporalModifiers(Date.now())
 /** Hold window states for fully charged sigils, keyed by sigilId */
 const holdWindows = new Map<string, import('@engine/charging/HoldWindow').HoldWindowState>()
 
-/** Counter for decay processing — runs every 60 ticks (60 seconds). */
+/** Counter for decay/dream processing — runs every 60 ticks (60 seconds). */
 let decayTickCounter = 0
 
 /** Look up a sigil and its demon from the grimoire by sigilId. */
@@ -55,6 +56,33 @@ function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Typ
   return null
 }
 
+/** Flatten all sigils from grimoire pages into a single array. */
+function collectAllSigils(pages: import('@db/grimoire').GrimoirePage[]): Sigil[] {
+  const out: Sigil[] = []
+  for (const page of pages) {
+    for (const sigil of page.sigils) out.push(sigil)
+  }
+  return out
+}
+
+/** Run dream processing for all eligible sigils. */
+function processDreams(now: number): void {
+  const store = useGrimoireStore.getState()
+  const demonDomains: Record<string, import('@engine/sigil/Types').DemonDomain[]> = {}
+  for (const page of store.pages) {
+    try {
+      demonDomains[page.demonId] = getDemon(page.demonId).domains
+    } catch { /* ignore */ }
+  }
+  const corruptionLevel = useCorruptionStore.getState().corruption.level
+  const { updatedSigils, updatedDreamStates, statesChanged } = processDreamBatch(
+    collectAllSigils(store.pages), store.dreamStates, now, corruptionLevel, demonDomains,
+  )
+  if (statesChanged) {
+    useGrimoireStore.getState().applyDreamBatch(updatedSigils, updatedDreamStates)
+  }
+}
+
 async function init(): Promise<void> {
   // ── UI overlay first — visible even if PixiJS fails ─────────────────────
   const ui = new UIManager()
@@ -62,6 +90,9 @@ async function init(): Promise<void> {
   // Load grimoire and research from localStorage
   useGrimoireStore.getState().load()
   useResearchStore.getState().load()
+
+  // Process any accumulated dreams since last session
+  processDreams(Date.now())
 
   // Show demon select immediately so the user sees something
   ui.showDemonSelect()
@@ -518,11 +549,9 @@ async function init(): Promise<void> {
     decayTickCounter++
     if (decayTickCounter >= 60) {
       decayTickCounter = 0
-      const allSigils: Sigil[] = []
-      for (const page of useGrimoireStore.getState().pages) {
-        for (const sigil of page.sigils) allSigils.push(sigil)
-      }
-      const decayStates = useGrimoireStore.getState().decayStates
+      const grimoireState = useGrimoireStore.getState()
+      const allSigils = collectAllSigils(grimoireState.pages)
+      const decayStates = grimoireState.decayStates
       const { updatedSigils, updatedDecayStates } = processDecayBatch(
         allSigils, decayStates, now, currentTemporalMods,
       )
@@ -532,6 +561,9 @@ async function init(): Promise<void> {
         // New decay states created (no sigils decayed yet, but states need persisting)
         useGrimoireStore.getState().applyDecayBatch([], updatedDecayStates)
       }
+
+      // Process sigil dreams on the same 60-second cadence
+      processDreams(now)
     }
 
     // ── Track bound demons for whisper personalisation ─────────────────────
