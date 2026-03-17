@@ -4,6 +4,7 @@ import { listDemons } from '@engine/demons/DemonRegistry'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
+import type { VesselPerspectiveState } from '@engine/corruption/VesselPerspective'
 import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
@@ -757,6 +758,16 @@ const STYLE = `
     font-family: inherit; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;
   }
   #vessel-warning-dismiss:hover { border-color: #ff4444; color: #ffaaaa; }
+
+  /* Post-purification flicker — random opacity jitter */
+  @keyframes purification-flicker {
+    0%, 96% { opacity: 1; }
+    97% { opacity: 0.85; }
+    98% { opacity: 0.95; }
+    99% { opacity: 0.80; }
+    100% { opacity: 1; }
+  }
+  .s-post-purification-flicker { animation: purification-flicker 3s infinite; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -793,6 +804,9 @@ export class UIManager {
   private _moonIndicator: HTMLDivElement | null = null
   private _lastMoonPhase: string = ''
   private _lastWitching: boolean = false
+  // Cached button references for vessel perspective
+  private _phaseBtns: Record<string, HTMLElement | null> = {}
+  private _bindBtn: HTMLElement | null = null
 
   constructor() {
     this._injectStyles()
@@ -1292,6 +1306,24 @@ export class UIManager {
     this._vesselWarning?.classList.add('visible')
   }
 
+  /** Apply vessel perspective label replacements and flicker. */
+  setVesselPerspective(perspective: VesselPerspectiveState): void {
+    // Replace phase button labels (using cached refs)
+    for (const phase of ['SEAL', 'GLYPH', 'RING'] as const) {
+      const btn = this._phaseBtns[phase]
+      if (btn) btn.textContent = perspective.labelReplacements[phase] ?? phase
+    }
+
+    // Replace BIND button label
+    if (this._bindBtn) this._bindBtn.textContent = perspective.labelReplacements['Bind'] ?? 'Bind'
+
+    // Post-purification flicker (2% chance per frame via CSS animation)
+    const ritual = this._screens.ritual
+    if (ritual) {
+      ritual.classList.toggle('s-post-purification-flicker', perspective.postPurificationFlickers)
+    }
+  }
+
   destroy(): void {
     this._stopRadar()
     this._unsubscribeStore?.()
@@ -1475,6 +1507,7 @@ export class UIManager {
         this._callbacks?.onPhaseChange(phase)
         this._updatePhaseButtons(phase)
       })
+      this._phaseBtns[phase] = btn
       toolbar.appendChild(btn)
     }
 
@@ -1508,10 +1541,10 @@ export class UIManager {
     }
     toolbar.appendChild(diffSelector)
 
-    const bindBtn = el('button', '', 'bind-btn')
-    bindBtn.textContent = 'Bind'
-    bindBtn.addEventListener('click', () => this._callbacks?.onBind())
-    toolbar.appendChild(bindBtn)
+    this._bindBtn = el('button', '', 'bind-btn')
+    this._bindBtn.textContent = 'Bind'
+    this._bindBtn.addEventListener('click', () => this._callbacks?.onBind())
+    toolbar.appendChild(this._bindBtn)
 
     screen.appendChild(toolbar)
     return screen
