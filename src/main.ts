@@ -27,7 +27,10 @@ import { attemptPurification } from '@engine/corruption/PurificationEngine'
 import { detectInvertedRite, composeInvertedSigil, evaluateBrokenRite } from '@engine/sigil/InvertedRiteEngine'
 import { getVesselPerspective, generateVesselWhisper } from '@engine/corruption/VesselPerspective'
 import type { PermanentScar } from '@engine/corruption/PurificationEngine'
-import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire, findResonances, calculateCorruptionSpread, tickFeral, generateFeralWhisper } from '@engine/grimoire'
+import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire, findResonances, calculateCorruptionSpread, tickFeral, generateFeralWhisper, captureShadowEntries, fadeShadowBatch } from '@engine/grimoire'
+import { generateOffer, isOfferExpired } from '@engine/demands/NegotiationEngine'
+import { evolveGlyph } from '@engine/sigil/GlyphEvolution'
+import { getGlyphTemplate } from '@engine/sigil/GlyphLibrary'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
@@ -532,6 +535,13 @@ async function init(): Promise<void> {
       const latLng = playerPos ? { lat: playerPos.lat, lng: playerPos.lng } : null
       const vessel = createVesselState('local', latLng, collectBoundDemons().demons, 0.5, Date.now())
       useCorruptionStore.getState().setVessel(vessel)
+
+      // Capture shadow grimoire entries on vessel start
+      const gState = useGrimoireStore.getState()
+      const shadowEntries = captureShadowEntries(gState.pages, Date.now())
+      if (shadowEntries.length > 0) {
+        gState.saveShadowEntries(shadowEntries)
+      }
     }
     _wasVessel = isVesselNow
   })
@@ -569,6 +579,19 @@ async function init(): Promise<void> {
       prevGlyphCount = state.placedGlyphs.length
       haptic('glyphRecognized')
       audioManager.play('glyphRecognized')
+
+      // Record glyph drawing for evolution tracking
+      // Note: stroke path recording happens in RitualCanvas (has access to raw stroke);
+      // here we just ensure the history entry exists for the recognized glyph
+      const lastGlyph = state.placedGlyphs[state.placedGlyphs.length - 1]
+      if (lastGlyph) {
+        const gStore = useGrimoireStore.getState()
+        const history = gStore.glyphHistory
+        const glyphId = lastGlyph.glyphId as string
+        if (!history[glyphId]) {
+          gStore.saveGlyphHistory({ ...history, [glyphId]: { glyphId: lastGlyph.glyphId, drawCount: 0, accumulatedPaths: [], evolvedCanonicalPath: null, divergenceFromOriginal: 0 } })
+        }
+      }
     } else {
       prevGlyphCount = state.placedGlyphs.length
     }
@@ -734,6 +757,68 @@ async function init(): Promise<void> {
               })
             }
           }
+        }
+      }
+
+      // ── Negotiation offers (generate after awakening) ──────────────────
+      {
+        const gState = useGrimoireStore.getState()
+        // Expire old offers
+        const validOffers = gState.activeOffers.filter(o => !isOfferExpired(o, now))
+        if (validOffers.length !== gState.activeOffers.length) {
+          gState.saveActiveOffers(validOffers)
+        }
+        // Generate new offers for awakened+ sigils with sufficient familiarity
+        for (const page of gState.pages) {
+          for (const sigil of page.sigils) {
+            if (sigil.status !== 'awakened' && sigil.status !== 'charged') continue
+            const famState = gState.familiarityStates[page.demonId]
+            if (!famState) continue
+            // Skip if already have an offer for this demon
+            if (validOffers.some(o => o.demonId === page.demonId)) continue
+            try {
+              const demon = getDemon(page.demonId)
+              const offer = generateOffer(demon, sigil, famState.tier, now)
+              if (offer) {
+                gState.saveActiveOffers([...validOffers, offer])
+                break // One offer per tick
+              }
+            } catch { /* demon not found */ }
+          }
+        }
+      }
+
+      // ── Shadow grimoire fading ────────────────────────────────────────
+      {
+        const gState = useGrimoireStore.getState()
+        if (gState.shadowEntries.length > 0) {
+          const { entries, changed } = fadeShadowBatch(gState.shadowEntries, now)
+          if (changed) {
+            gState.saveShadowEntries(entries)
+          }
+        }
+      }
+
+      // ── Glyph evolution (check after accumulating draws) ──────────────
+      {
+        const gState = useGrimoireStore.getState()
+        const history = gState.glyphHistory
+        let historyChanged = false
+        const updatedHistory = { ...history }
+        for (const [glyphId, h] of Object.entries(history)) {
+          if (h.drawCount >= 50 && !h.evolvedCanonicalPath) {
+            try {
+              const template = getGlyphTemplate(glyphId as import('@engine/sigil/Types').GlyphId)
+              const evolved = evolveGlyph(h, template.canonicalPath)
+              if (evolved !== h) {
+                updatedHistory[glyphId] = evolved
+                historyChanged = true
+              }
+            } catch { /* glyph not found */ }
+          }
+        }
+        if (historyChanged) {
+          gState.saveGlyphHistory(updatedHistory)
         }
       }
 

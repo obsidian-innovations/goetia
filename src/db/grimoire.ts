@@ -5,6 +5,9 @@ import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
 import type { DreamState } from '@engine/sigil/DreamEngine'
 import type { GrimoireMemory } from '@engine/grimoire/PalimpsestEngine'
 import type { FeralSigilState } from '@engine/grimoire/FeralEngine'
+import type { GlyphDrawingHistory } from '@engine/sigil/GlyphEvolution'
+import type { ShadowEntry } from '@engine/grimoire/ShadowGrimoire'
+import type { DemonOffer } from '@engine/demands/NegotiationEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -23,6 +26,9 @@ interface GrimoireData {
   dream?: Record<string, DreamState>
   grimoireMemory?: GrimoireMemory
   feral?: Record<string, FeralSigilState>
+  glyphHistory?: Record<string, GlyphDrawingHistory>
+  shadowEntries?: ShadowEntry[]
+  activeOffers?: DemonOffer[]
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -50,6 +56,9 @@ export class GrimoireDB {
   private dream: Record<string, DreamState> = {}
   private grimoireMemory: GrimoireMemory | null = null
   private feral: Record<string, FeralSigilState> = {}
+  private glyphHistory: Record<string, GlyphDrawingHistory> = {}
+  private shadowEntries: ShadowEntry[] = []
+  private activeOffers: DemonOffer[] = []
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -64,6 +73,9 @@ export class GrimoireDB {
         this.dream = {}
         this.grimoireMemory = null
         this.feral = {}
+        this.glyphHistory = {}
+        this.shadowEntries = []
+        this.activeOffers = []
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -76,6 +88,9 @@ export class GrimoireDB {
         this.dream = {}
         this.grimoireMemory = null
         this.feral = {}
+        this.glyphHistory = {}
+        this.shadowEntries = []
+        this.activeOffers = []
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
@@ -84,6 +99,9 @@ export class GrimoireDB {
         this.dream = parsed.dream ?? {}
         this.grimoireMemory = parsed.grimoireMemory ?? null
         this.feral = parsed.feral ?? {}
+        this.glyphHistory = parsed.glyphHistory ?? {}
+        this.shadowEntries = parsed.shadowEntries ?? []
+        this.activeOffers = parsed.activeOffers ?? []
       }
     } catch {
       this.pages = []
@@ -93,12 +111,15 @@ export class GrimoireDB {
       this.dream = {}
       this.grimoireMemory = null
       this.feral = {}
+      this.glyphHistory = {}
+      this.shadowEntries = []
+      this.activeOffers = []
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream, grimoireMemory: this.grimoireMemory ?? undefined, feral: Object.keys(this.feral).length > 0 ? this.feral : undefined }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream, grimoireMemory: this.grimoireMemory ?? undefined, feral: Object.keys(this.feral).length > 0 ? this.feral : undefined, glyphHistory: Object.keys(this.glyphHistory).length > 0 ? this.glyphHistory : undefined, shadowEntries: this.shadowEntries.length > 0 ? this.shadowEntries : undefined, activeOffers: this.activeOffers.length > 0 ? this.activeOffers : undefined }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -205,6 +226,9 @@ export class GrimoireDB {
     this.dream = {}
     this.grimoireMemory = null
     this.feral = {}
+    this.glyphHistory = {}
+    this.shadowEntries = []
+    this.activeOffers = []
     this.persist()
   }
 
@@ -300,6 +324,45 @@ export class GrimoireDB {
   saveFeralStates(states: Record<string, FeralSigilState>): void {
     this.load()
     this.feral = states
+    this.persist()
+  }
+
+  // ─── Glyph history ────────────────────────────────────────────────────────
+
+  getAllGlyphHistory(): Record<string, GlyphDrawingHistory> {
+    this.load()
+    return this.glyphHistory
+  }
+
+  saveGlyphHistory(history: Record<string, GlyphDrawingHistory>): void {
+    this.load()
+    this.glyphHistory = history
+    this.persist()
+  }
+
+  // ─── Shadow entries ──────────────────────────────────────────────────────
+
+  getAllShadowEntries(): ShadowEntry[] {
+    this.load()
+    return this.shadowEntries
+  }
+
+  saveShadowEntries(entries: ShadowEntry[]): void {
+    this.load()
+    this.shadowEntries = entries
+    this.persist()
+  }
+
+  // ─── Active offers ───────────────────────────────────────────────────────
+
+  getAllActiveOffers(): DemonOffer[] {
+    this.load()
+    return this.activeOffers
+  }
+
+  saveActiveOffers(offers: DemonOffer[]): void {
+    this.load()
+    this.activeOffers = offers
     this.persist()
   }
 

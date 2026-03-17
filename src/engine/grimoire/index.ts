@@ -25,3 +25,12 @@ export {
   generateFeralWhisper,
 } from './FeralEngine'
 export type { FeralSigilState, WildSigilEvent, FeralTickResult } from './FeralEngine'
+export {
+  captureShadowEntries,
+  fadeShadow,
+  fadeShadowBatch,
+  getShadowLore,
+  isShadowVisible,
+  getVisibleShadows,
+} from './ShadowGrimoire'
+export type { ShadowEntry } from './ShadowGrimoire'
