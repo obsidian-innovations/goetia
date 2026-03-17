@@ -53,14 +53,6 @@ const DEMAND_PERSONALIZATION: Record<FamiliarityTier, DemandPersonalization> = {
   bonded:       'unrefusable',
 }
 
-/** Flavor text shown in the grimoire per tier. */
-export const TIER_FLAVOR: Record<FamiliarityTier, string> = {
-  stranger:     "A stranger's seal",
-  acquaintance: 'It recognizes your hand',
-  familiar:     'The demon speaks your name',
-  bonded:       'You are bound together',
-}
-
 /** Number of edges simplified at bonded tier. */
 const BONDED_SIMPLIFY_COUNT = 2
 
@@ -163,13 +155,13 @@ function applySimplification(
   simplifiedEdges: Array<{ from: NodeId; to: NodeId }>,
 ): SealGeometry {
   const simplified = new Set(
-    simplifiedEdges.map(e => `${e.from}-${e.to}`),
+    simplifiedEdges.map(e => `${e.from}:${e.to}`),
   )
 
   const nodeMap = new Map(geo.nodes.map(n => [n.id, n]))
 
   const edges: SealEdge[] = geo.edges.map(edge => {
-    const key = `${edge.fromNode}-${edge.toNode}`
+    const key = `${edge.fromNode}:${edge.toNode}`
     if (simplified.has(key)) {
       // Reduce to a straight line (2-point canonical path)
       const fromNode = nodeMap.get(edge.fromNode)!

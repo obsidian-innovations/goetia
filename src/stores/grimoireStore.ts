@@ -3,7 +3,8 @@ import { grimoireDB } from '@db/grimoire'
 import type { GrimoirePage } from '@db/grimoire'
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { DecayState } from '@engine/sigil/DecayEngine'
-import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
+import { processInteraction } from '@engine/familiarity/FamiliarityEngine'
+import type { FamiliarityState, FamiliarityEventType } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
@@ -21,8 +22,8 @@ interface GrimoireActions {
   getPageForDemon: (demonId: string) => GrimoirePage | undefined
   /** Batch-update decayed sigils and their decay states. */
   applyDecayBatch: (updatedSigils: Sigil[], updatedDecayStates: Record<string, DecayState>) => void
-  /** Update familiarity for a demon. */
-  updateFamiliarity: (states: Record<string, FamiliarityState>) => void
+  /** Record a familiarity event for a demon (atomic read-modify-write). */
+  recordFamiliarity: (demonId: string, eventType: FamiliarityEventType) => void
 }
 
 type GrimoireStore = GrimoireState & GrimoireActions
@@ -65,8 +66,9 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
     set({ pages, decayStates: updatedDecayStates })
   },
 
-  updateFamiliarity(states: Record<string, FamiliarityState>) {
-    grimoireDB.saveAllFamiliarity(states)
-    set({ familiarityStates: states })
+  recordFamiliarity(demonId: string, eventType: FamiliarityEventType) {
+    const { updatedState } = processInteraction(get().familiarityStates, demonId, eventType, Date.now())
+    grimoireDB.saveFamiliarity(updatedState)
+    set({ familiarityStates: { ...get().familiarityStates, [demonId]: updatedState } })
   },
 }))

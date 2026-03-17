@@ -28,8 +28,6 @@ import { getBestSigil } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
-import { processInteraction } from '@engine/familiarity/FamiliarityEngine'
-import type { FamiliarityEventType } from '@engine/familiarity/FamiliarityEngine'
 import type { Sigil } from '@engine/sigil/Types'
 
 const lifecycleManager = new SigilLifecycleManager()
@@ -55,13 +53,6 @@ function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Typ
     }
   }
   return null
-}
-
-/** Record a familiarity interaction and persist. */
-function recordFamiliarity(demonId: string, eventType: FamiliarityEventType): void {
-  const states = useGrimoireStore.getState().familiarityStates
-  const { allStates } = processInteraction(states, demonId, eventType, Date.now())
-  useGrimoireStore.getState().updateFamiliarity(allStates)
 }
 
 async function init(): Promise<void> {
@@ -154,7 +145,7 @@ async function init(): Promise<void> {
           useChargingStore.getState().startCharging(completedSigil, demon)
 
           // Record familiarity interaction
-          recordFamiliarity(demonId, 'ritual_complete')
+          useGrimoireStore.getState().recordFamiliarity(demonId, 'ritual_complete')
 
           // Generate initial demand (with familiarity personalization)
           const famTier = useGrimoireStore.getState().familiarityStates[demonId]?.tier
@@ -179,14 +170,14 @@ async function init(): Promise<void> {
       useChargingStore.getState().fulfillDemand(demandId)
       // Find which demon this demand belongs to and record familiarity
       const demonId = useCanvasStore.getState().currentDemonId
-      if (demonId) recordFamiliarity(demonId, 'demand_fulfilled')
+      if (demonId) useGrimoireStore.getState().recordFamiliarity(demonId, 'demand_fulfilled')
     },
 
     onIgnoreDemand(_demandId: string) {
       // Ignoring a demand adds corruption based on the current demon's rank
       const demonId = useCanvasStore.getState().currentDemonId
       if (demonId) {
-        recordFamiliarity(demonId, 'demand_ignored')
+        useGrimoireStore.getState().recordFamiliarity(demonId, 'demand_ignored')
         try {
           const demon = getDemon(demonId)
           const amount = getCorruptionAmount('demand_ignored', demon.rank) * currentTemporalMods.corruptionMultiplier
@@ -201,7 +192,7 @@ async function init(): Promise<void> {
       const sigil = page?.sigils.find(s => s.id === _sigilId)
       if (sigil) {
         useResearchStore.getState().addProgress(demonId, studiedSigil(sigil))
-        recordFamiliarity(demonId, 'study')
+        useGrimoireStore.getState().recordFamiliarity(demonId, 'study')
         ui.refreshDemonGrid()
       }
     },
@@ -225,7 +216,7 @@ async function init(): Promise<void> {
       if (!found) return
       const hex = usePvPStore.getState().castHex(targetLabel, found.sigil, found.demon)
       networkService.sendHex(targetLabel, hex)
-      recordFamiliarity(found.demon.id, 'hex_cast')
+      useGrimoireStore.getState().recordFamiliarity(found.demon.id, 'hex_cast')
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
     },
@@ -492,7 +483,7 @@ async function init(): Promise<void> {
 
         // Transition to resting when fully charged and start hold window
         if (chargeState.chargeProgress >= 1) {
-          recordFamiliarity(chargeState.demonId, 'charge_complete')
+          useGrimoireStore.getState().recordFamiliarity(chargeState.demonId, 'charge_complete')
           const pages = useGrimoireStore.getState().pages
           for (const page of pages) {
             for (const sigil of page.sigils) {

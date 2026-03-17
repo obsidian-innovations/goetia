@@ -22,7 +22,16 @@ import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
 import { DECAYABLE_STATUSES } from '@engine/sigil/DecayEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
-import { TIER_FLAVOR } from '@engine/familiarity/FamiliarityEngine'
+import type { FamiliarityTier } from '@engine/familiarity/FamiliarityEngine'
+
+// ─── Familiarity display text (presentation layer, not engine) ───────────────
+
+const TIER_FLAVOR: Record<FamiliarityTier, string> = {
+  stranger:     "A stranger's seal",
+  acquaintance: 'It recognizes your hand',
+  familiar:     'The demon speaks your name',
+  bonded:       'You are bound together',
+}
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 

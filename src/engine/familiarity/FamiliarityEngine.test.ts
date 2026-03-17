@@ -10,11 +10,10 @@ import {
   processInteraction,
 } from './FamiliarityEngine'
 import type { FamiliarityState, FamiliarityEvent } from './FamiliarityEngine'
-import type { Demon, NodeId } from '@engine/sigil/Types'
+import type { Demon } from '@engine/sigil/Types'
+import { nid } from '@engine/demons/geometry'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function nid(id: string): NodeId { return id as NodeId }
 
 function makeState(overrides: Partial<FamiliarityState> = {}): FamiliarityState {
   return {
