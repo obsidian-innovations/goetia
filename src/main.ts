@@ -27,7 +27,7 @@ import { attemptPurification } from '@engine/corruption/PurificationEngine'
 import { detectInvertedRite, composeInvertedSigil, evaluateBrokenRite } from '@engine/sigil/InvertedRiteEngine'
 import { getVesselPerspective, generateVesselWhisper } from '@engine/corruption/VesselPerspective'
 import type { PermanentScar } from '@engine/corruption/PurificationEngine'
-import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire, findResonances, calculatePassiveCharge, calculateCorruptionSpread, tickFeral, generateFeralWhisper } from '@engine/grimoire'
+import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire, findResonances, calculateCorruptionSpread, tickFeral, generateFeralWhisper } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
@@ -650,40 +650,34 @@ async function init(): Promise<void> {
       // ── Sympathetic harmonics: compute resonances and apply effects ──────
       {
         const gState = useGrimoireStore.getState()
-        const allDemons = listDemons()
-        const resonances = findResonances(gState.pages, allDemons)
+        if (gState.pages.length > 0) {
+          const allDemons = listDemons()
+          const resonances = findResonances(gState.pages, allDemons)
 
-        // Passive charge for resonating resting/awakened sigils
-        if (resonances.length > 0) {
-          const passiveCharges = calculatePassiveCharge(resonances, gState.pages, 60_000)
-          // Apply as micro-corruption (resonance leaks corruption between sigils)
-          const corruptionSpread = calculateCorruptionSpread(resonances, gState.pages)
-          if (corruptionSpread > 0) {
-            useCorruptionStore.getState().addCorruption({
-              type: 'sigil_cast',
-              amount: corruptionSpread * 0.01, // Scale down for 60s tick
-              timestamp: now,
-            })
+          if (resonances.length > 0) {
+            const corruptionSpread = calculateCorruptionSpread(resonances, gState.pages)
+            if (corruptionSpread > 0) {
+              useCorruptionStore.getState().addCorruption({
+                type: 'sigil_cast',
+                amount: corruptionSpread * 0.01, // Scale down for 60s tick
+                timestamp: now,
+              })
+            }
           }
-          // Note: passiveCharges could be applied to charging store if needed
-          void passiveCharges // Available for future integration
         }
       }
 
       // ── Feral sigil processing ──────────────────────────────────────────
       {
         const gState = useGrimoireStore.getState()
-        const allSigilsFeral = collectAllSigils(gState.pages)
-        const feralResult = tickFeral(allSigilsFeral, gState.feralStates, now)
+        const feralResult = tickFeral(allSigils, gState.feralStates, now)
         if (feralResult.statesChanged) {
-          useGrimoireStore.getState().saveFeralStates(feralResult.updatedStates)
+          gState.saveFeralStates(feralResult.updatedStates)
         }
         if (feralResult.wildEvent) {
           ui.showWhisper(feralResult.wildEvent.description, 'high')
         }
-        // Show feral whisper occasionally when feral sigils exist
-        const feralCount = Object.values(feralResult.updatedStates).filter(s => s.isFeral).length
-        if (feralCount > 0 && Math.random() < 0.1) {
+        if (feralResult.feralCount > 0 && Math.random() < 0.1) {
           ui.showWhisper(generateFeralWhisper(), 'medium')
         }
       }

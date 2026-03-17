@@ -50,6 +50,14 @@ const DOMAIN_EFFECTS: Record<DemonDomain, Omit<DomainEffect, 'domain'>> = {
   liberation:     { chargeBonus: 0.03, corruptionPenalty: 0.04 },
 }
 
+// ─── Internal helpers ─────────────────────────────────────────────────────
+
+function buildPageIndex(pages: PageLike[]): Map<string, PageLike> {
+  const index = new Map<string, PageLike>()
+  for (const page of pages) index.set(page.demonId, page)
+  return index
+}
+
 // ─── Core functions ───────────────────────────────────────────────────────
 
 /**
@@ -109,11 +117,12 @@ export function calculatePassiveCharge(
 ): Map<string, number> {
   const charges = new Map<string, number>()
   const intervalMinutes = intervalMs / 60_000
+  const pageIndex = buildPageIndex(pages)
 
   for (const resonance of resonances) {
     const rate = resonance.passiveChargeRate * intervalMinutes
     for (const demonId of resonance.resonatingDemonIds) {
-      const page = pages.find(p => p.demonId === demonId)
+      const page = pageIndex.get(demonId)
       if (!page) continue
       for (const sigil of page.sigils) {
         // Only resting or awakened sigils gain passive charge
@@ -137,12 +146,13 @@ export function calculateCorruptionSpread(
   pages: PageLike[],
 ): number {
   let totalSpread = 0
+  const pageIndex = buildPageIndex(pages)
 
   for (const resonance of resonances) {
     // Find the highest-corruption sigil among resonating demons
     let maxCorruption = 0
     for (const demonId of resonance.resonatingDemonIds) {
-      const page = pages.find(p => p.demonId === demonId)
+      const page = pageIndex.get(demonId)
       if (!page) continue
       for (const sigil of page.sigils) {
         if (sigil.visualState === 'corrupted' || sigil.overallIntegrity < 0.30) {

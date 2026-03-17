@@ -20,6 +20,7 @@ export interface WildSigilEvent {
 export interface FeralTickResult {
   updatedStates: Record<string, FeralSigilState>
   statesChanged: boolean
+  feralCount: number
   wildEvent: WildSigilEvent | null
 }
 
@@ -86,6 +87,13 @@ export function checkFeralStatus(
 export function tickFeralDrift(
   states: Record<string, FeralSigilState>,
 ): Record<string, FeralSigilState> {
+  // Early return if no feral sigils — avoid allocating a new object
+  let hasAnyFeral = false
+  for (const state of Object.values(states)) {
+    if (state.isFeral) { hasAnyFeral = true; break }
+  }
+  if (!hasAnyFeral) return states
+
   let changed = false
   const updated: Record<string, FeralSigilState> = {}
 
@@ -135,9 +143,9 @@ export function tickFeral(
   }
 
   // Remove states for sigils that are no longer spent
+  const spentSigilIds = new Set(sigils.filter(s => s.status === 'spent').map(s => s.id))
   for (const id of Object.keys(updatedStates)) {
-    const sigil = sigils.find(s => s.id === id)
-    if (sigil && sigil.status !== 'spent') {
+    if (!spentSigilIds.has(id)) {
       delete updatedStates[id]
       statesChanged = true
     }
@@ -155,7 +163,7 @@ export function tickFeral(
     ? { triggered: true, description: generateWildSigilDescription(feralCount), feralCount }
     : null
 
-  return { updatedStates: drifted, statesChanged, wildEvent }
+  return { updatedStates: drifted, statesChanged, feralCount, wildEvent }
 }
 
 /**
