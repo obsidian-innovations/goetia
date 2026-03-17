@@ -6,7 +6,7 @@ import type { DecayState } from '@engine/sigil/DecayEngine'
 import { processInteraction } from '@engine/familiarity/FamiliarityEngine'
 import type { FamiliarityState, FamiliarityEventType } from '@engine/familiarity/FamiliarityEngine'
 import type { DreamState } from '@engine/sigil/DreamEngine'
-import type { GrimoireMemory } from '@engine/grimoire'
+import type { GrimoireMemory, FeralSigilState } from '@engine/grimoire'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
@@ -16,6 +16,7 @@ interface GrimoireState {
   familiarityStates: Record<string, FamiliarityState>
   dreamStates: Record<string, DreamState>
   grimoireMemory: GrimoireMemory | null
+  feralStates: Record<string, FeralSigilState>
   isLoaded: boolean
 }
 
@@ -32,6 +33,8 @@ interface GrimoireActions {
   applyDreamBatch: (updatedSigils: Sigil[], updatedDreamStates: Record<string, DreamState>) => void
   /** Save updated grimoire memory. */
   saveMemory: (memory: GrimoireMemory) => void
+  /** Save updated feral sigil states. */
+  saveFeralStates: (states: Record<string, FeralSigilState>) => void
 }
 
 type GrimoireStore = GrimoireState & GrimoireActions
@@ -45,6 +48,7 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   familiarityStates: {},
   dreamStates: {},
   grimoireMemory: null,
+  feralStates: {},
   isLoaded: false,
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -55,7 +59,8 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
     const familiarityStates = grimoireDB.getAllFamiliarity()
     const dreamStates = grimoireDB.getAllDreamStates()
     const grimoireMemory = grimoireDB.getGrimoireMemory()
-    set({ pages, decayStates, familiarityStates, dreamStates, grimoireMemory, isLoaded: true })
+    const feralStates = grimoireDB.getAllFeralStates()
+    set({ pages, decayStates, familiarityStates, dreamStates, grimoireMemory, feralStates, isLoaded: true })
   },
 
   saveSigil(sigil: Sigil) {
@@ -92,5 +97,10 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   saveMemory(memory: GrimoireMemory) {
     grimoireDB.saveGrimoireMemory(memory)
     set({ grimoireMemory: memory })
+  },
+
+  saveFeralStates(states: Record<string, FeralSigilState>) {
+    grimoireDB.saveFeralStates(states)
+    set({ feralStates: states })
   },
 }))
