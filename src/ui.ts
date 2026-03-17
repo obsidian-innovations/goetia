@@ -22,6 +22,7 @@ import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
 import { DECAYABLE_STATUSES } from '@engine/sigil/DecayEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
+import type { DreamState } from '@engine/sigil/DreamEngine'
 import type { FamiliarityTier } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Familiarity display text (presentation layer, not engine) ───────────────
@@ -282,6 +283,13 @@ const STYLE = `
   .grimoire-section .s-familiarity.tier-bonded { color: #cc9900; }
   .grimoire-section .s-familiarity.tier-familiar { color: #66aa88; }
   .grimoire-section .s-familiarity.tier-acquaintance { color: #7788aa; }
+  .sigil-entry .s-dream-lore {
+    font-size: 0.6rem; color: #6655aa; font-style: italic;
+    margin-top: 3px; opacity: 0.8; letter-spacing: 0.03em;
+  }
+  .sigil-entry .s-dream-drift {
+    font-size: 0.55rem; color: #554488; margin-top: 2px; opacity: 0.6;
+  }
   #grimoire-empty { text-align: center; color: #443355; font-size: 0.85rem; margin-top: 3rem; }
 
   /* ── Charging ── */
@@ -2478,6 +2486,7 @@ export class UIManager {
     const pages = useGrimoireStore.getState().pages
     const decayStates = useGrimoireStore.getState().decayStates
     const familiarityStates = useGrimoireStore.getState().familiarityStates
+    const dreamStates = useGrimoireStore.getState().dreamStates
     const research = useResearchStore.getState().researching
     const demonMap = new Map(listDemons().map(d => [d.id, d]))
     const content = this._root.querySelector<HTMLElement>('#grimoire-content')
@@ -2521,7 +2530,8 @@ export class UIManager {
 
       for (const sigil of page.sigils) {
         const decay = decayStates[sigil.id] ?? null
-        section.appendChild(this._sigilEntry(sigil, demon?.name ?? page.demonId, rs, decay))
+        const dream = dreamStates[sigil.id] ?? null
+        section.appendChild(this._sigilEntry(sigil, demon?.name ?? page.demonId, rs, decay, dream))
       }
       content.appendChild(section)
     }
@@ -2532,6 +2542,7 @@ export class UIManager {
     demonName: string,
     researchState: ResearchState | null,
     decayState?: DecayState | null,
+    dreamState?: DreamState | null,
   ): HTMLDivElement {
     const entry = el('div', 'sigil-entry')
     if (sigil.isAncient) entry.classList.add('ancient')
@@ -2571,6 +2582,20 @@ export class UIManager {
         strata.appendChild(el('div', 's-strata-mark'))
       }
       meta.appendChild(strata)
+    }
+
+    // Dream lore fragment — show the most recent revealed fragment
+    if (dreamState && dreamState.loreFragmentsRevealed.length > 0) {
+      const loreEl = el('div', 's-dream-lore')
+      loreEl.textContent = dreamState.loreFragmentsRevealed[dreamState.loreFragmentsRevealed.length - 1]
+      meta.appendChild(loreEl)
+    }
+
+    // Dream drift indicator
+    if (dreamState && dreamState.driftHistory.length > 0) {
+      const driftEl = el('div', 's-dream-drift')
+      driftEl.textContent = `Drifted ${dreamState.driftHistory.length}\u00d7`
+      meta.appendChild(driftEl)
     }
 
     entry.appendChild(dot)
