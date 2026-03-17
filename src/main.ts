@@ -24,8 +24,7 @@ import { calculateMisfire } from '@engine/pvp/MisfireEngine'
 import { createHoldWindowState, isCollapsed } from '@engine/charging/HoldWindow'
 import { createVesselState } from '@engine/corruption/VesselState'
 import { attemptPurification } from '@engine/corruption/PurificationEngine'
-import { getBestSigil } from '@engine/grimoire'
-import { createGrimoireMemory, recordRitual, tickGrimoire } from '@engine/grimoire/PalimpsestEngine'
+import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
@@ -95,7 +94,7 @@ function processGrimoire(now: number, ui: UIManager): void {
 
   const result = tickGrimoire(memory, store.pages, store.familiarityStates, now)
   if (result.memory !== memory) {
-    useGrimoireStore.getState().saveMemory(result.memory)
+    store.saveMemory(result.memory)
   }
 
   // Route grimoire whisper through corruption whisper UI
@@ -176,18 +175,18 @@ async function init(): Promise<void> {
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
 
-      // Record ritual in grimoire memory (palimpsest)
-      {
-        const grimoireState = useGrimoireStore.getState()
-        const mem = grimoireState.grimoireMemory ?? createGrimoireMemory(Date.now())
-        const dId = useCanvasStore.getState().currentDemonId
-        const domains = dId ? (() => { try { return getDemon(dId).domains } catch { return [] } })() : []
-        const corruptionLevel = useCorruptionStore.getState().corruption.level
-        useGrimoireStore.getState().saveMemory(recordRitual(mem, domains, corruptionLevel))
-      }
-
       // Award research XP and record world ritual activity
       const demonId = useCanvasStore.getState().currentDemonId
+
+      // Record ritual in grimoire memory (palimpsest)
+      {
+        const gStore = useGrimoireStore.getState()
+        const mem = gStore.grimoireMemory ?? createGrimoireMemory(Date.now())
+        let domains: import('@engine/sigil/Types').DemonDomain[] = []
+        if (demonId) { try { domains = getDemon(demonId).domains } catch { /* unknown demon */ } }
+        const corruptionLevel = useCorruptionStore.getState().corruption.level
+        gStore.saveMemory(recordRitual(mem, domains, corruptionLevel))
+      }
       if (demonId) {
         const xp = completedRitual(completedSigil.overallIntegrity)
         useResearchStore.getState().addProgress(demonId, xp)

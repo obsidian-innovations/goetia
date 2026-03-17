@@ -154,10 +154,10 @@ describe('PalimpsestEngine', () => {
       expect(result.behavior).toBeNull()
     })
 
-    it('updates lastBehaviorAt even when no behavior produced', () => {
+    it('returns original memory reference when no behavior produced', () => {
       const mem = makeMemory({ memoryScore: 0.1 })
       const result = tickGrimoire(mem, [], {}, NOW)
-      expect(result.memory.lastBehaviorAt).toBe(NOW)
+      expect(result.memory).toBe(mem)
     })
 
     it('produces page_reorder when score >= 0.3', () => {

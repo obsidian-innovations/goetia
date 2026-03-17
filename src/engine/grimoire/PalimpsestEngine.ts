@@ -152,7 +152,7 @@ export function tickGrimoire(
 
   const behavior = pickBehavior(memory, pages, familiarityStates, now)
   if (!behavior) {
-    return { memory: { ...memory, lastBehaviorAt: now }, behavior: null }
+    return { memory, behavior: null }
   }
 
   const behaviors = [...memory.behaviors, behavior].slice(-MAX_BEHAVIOR_HISTORY)
@@ -199,8 +199,7 @@ function pickBehavior(
 // ─── Individual behavior generators ──────────────────────────────────────
 
 function generateGrimoireWhisperBehavior(now: number): GrimoireBehavior {
-  const text = GRIMOIRE_WHISPERS[Math.floor(Math.random() * GRIMOIRE_WHISPERS.length)]
-  return { type: 'whisper', timestamp: now, data: { text } }
+  return { type: 'whisper', timestamp: now, data: { text: generateGrimoireWhisper() } }
 }
 
 /**

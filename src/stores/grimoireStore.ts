@@ -6,7 +6,7 @@ import type { DecayState } from '@engine/sigil/DecayEngine'
 import { processInteraction } from '@engine/familiarity/FamiliarityEngine'
 import type { FamiliarityState, FamiliarityEventType } from '@engine/familiarity/FamiliarityEngine'
 import type { DreamState } from '@engine/sigil/DreamEngine'
-import type { GrimoireMemory } from '@engine/grimoire/PalimpsestEngine'
+import type { GrimoireMemory } from '@engine/grimoire'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
