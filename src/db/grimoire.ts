@@ -114,6 +114,15 @@ export class GrimoireDB {
     this.persist()
   }
 
+  /** Atomically persist sigils and decay states in a single load/persist cycle. */
+  saveDecayBatch(sigils: Sigil[], decayStates: Record<string, DecayState>): GrimoirePage[] {
+    this.load()
+    for (const sigil of sigils) this._upsertSigil(sigil)
+    this.decay = { ...decayStates }
+    this.persist()
+    return this.pages
+  }
+
   private _upsertSigil(sigil: Sigil): void {
     let page = this.pages.find(p => p.demonId === sigil.demonId)
     if (!page) {
