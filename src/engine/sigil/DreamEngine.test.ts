@@ -121,7 +121,7 @@ describe('DreamEngine', () => {
       vi.spyOn(Math, 'random').mockReturnValue(0.99)
       const result = checkDream(sigil, state, NOW, 0, [])
       expect(result).not.toBeNull()
-      expect(result!.drifted).toBe(true)
+      expect(result!.driftEvent).toBeDefined()
     })
 
     it('produces drift after 4+ hours', () => {
@@ -132,10 +132,10 @@ describe('DreamEngine', () => {
 
       const result = checkDream(sigil, state, NOW, 0, [])
       expect(result).not.toBeNull()
-      expect(result!.drifted).toBe(true)
+      expect(result!.driftEvent).toBeDefined()
       expect(result!.driftEvent).not.toBeNull()
-      expect(result!.driftEvent!.glyphShifts).toHaveLength(2)
-      expect(result!.driftEvent!.ringWeakPointShifts).toHaveLength(2)
+      expect(result!.driftEvent.glyphShifts).toHaveLength(2)
+      expect(result!.driftEvent.ringWeakPointShifts).toHaveLength(2)
     })
 
     it('glyph shifts stay within drift magnitude bounds', () => {
@@ -172,8 +172,8 @@ describe('DreamEngine', () => {
 
       vi.spyOn(Math, 'random').mockReturnValue(0.10) // Below 0.20 threshold
       const result = checkDream(sigil, state, NOW, 0, ['knowledge'])
-      expect(result!.driftEvent!.loreFragment).not.toBeNull()
-      expect(result!.driftEvent!.loreFragment!.length).toBeGreaterThan(0)
+      expect(result!.driftEvent.loreFragment).not.toBeNull()
+      expect(result!.driftEvent.loreFragment!.length).toBeGreaterThan(0)
     })
 
     it('suppresses lore fragment when random > 0.20', () => {
@@ -182,7 +182,7 @@ describe('DreamEngine', () => {
 
       vi.spyOn(Math, 'random').mockReturnValue(0.50) // Above threshold
       const result = checkDream(sigil, state, NOW, 0, ['knowledge'])
-      expect(result!.driftEvent!.loreFragment).toBeNull()
+      expect(result!.driftEvent.loreFragment).toBeNull()
     })
 
     it('handles sigil with no binding ring', () => {
@@ -192,7 +192,7 @@ describe('DreamEngine', () => {
 
       const result = checkDream(sigil, state, NOW, 0, [])
       expect(result).not.toBeNull()
-      expect(result!.driftEvent!.ringWeakPointShifts).toHaveLength(0)
+      expect(result!.driftEvent.ringWeakPointShifts).toHaveLength(0)
     })
 
     it('handles sigil with no glyphs', () => {
@@ -202,7 +202,7 @@ describe('DreamEngine', () => {
 
       const result = checkDream(sigil, state, NOW, 0, [])
       expect(result).not.toBeNull()
-      expect(result!.driftEvent!.glyphShifts).toHaveLength(0)
+      expect(result!.driftEvent.glyphShifts).toHaveLength(0)
     })
 
     it('uses generic lore when no domains provided', () => {
@@ -211,7 +211,7 @@ describe('DreamEngine', () => {
 
       vi.spyOn(Math, 'random').mockReturnValue(0.10)
       const result = checkDream(sigil, state, NOW, 0, [])
-      expect(result!.driftEvent!.loreFragment).not.toBeNull()
+      expect(result!.driftEvent.loreFragment).not.toBeNull()
     })
 
     it('avoids already-revealed lore fragments when possible', () => {
@@ -230,8 +230,8 @@ describe('DreamEngine', () => {
       vi.spyOn(Math, 'random').mockReturnValue(0.05)
       const result = checkDream(sigil, state, NOW, 0, ['knowledge'])
       // Should pick from the remaining unrevealed fragment
-      expect(result!.driftEvent!.loreFragment).not.toBeNull()
-      expect(knowledgeLore).not.toContain(result!.driftEvent!.loreFragment)
+      expect(result!.driftEvent.loreFragment).not.toBeNull()
+      expect(knowledgeLore).not.toContain(result!.driftEvent.loreFragment)
     })
   })
 
@@ -277,16 +277,16 @@ describe('DreamEngine', () => {
         timestamp: NOW,
         glyphShifts: [],
         ringWeakPointShifts: [
-          { index: 0, startAngle: 0.6, endAngle: 0.9 },
-          { index: 1, startAngle: 2.1, endAngle: 2.4 },
+          { index: 0, dStartAngle: 0.1, dEndAngle: 0.1 },
+          { index: 1, dStartAngle: 0.1, dEndAngle: 0.1 },
         ],
         loreFragment: null,
       }
 
       const result = applyDrift(sigil, drift)
-      expect(result.bindingRing!.weakPoints[0].startAngle).toBe(0.6)
-      expect(result.bindingRing!.weakPoints[0].endAngle).toBe(0.9)
-      expect(result.bindingRing!.weakPoints[1].startAngle).toBe(2.1)
+      expect(result.bindingRing!.weakPoints[0].startAngle).toBeCloseTo(0.6) // 0.5 + 0.1
+      expect(result.bindingRing!.weakPoints[0].endAngle).toBeCloseTo(0.9) // 0.8 + 0.1
+      expect(result.bindingRing!.weakPoints[1].startAngle).toBeCloseTo(2.1) // 2.0 + 0.1
     })
 
     it('preserves original sigil immutably', () => {
@@ -308,7 +308,7 @@ describe('DreamEngine', () => {
       const drift: DriftEvent = {
         timestamp: NOW,
         glyphShifts: [],
-        ringWeakPointShifts: [{ index: 0, startAngle: 1.0, endAngle: 1.5 }],
+        ringWeakPointShifts: [{ index: 0, dStartAngle: 0.5, dEndAngle: 0.7 }],
         loreFragment: null,
       }
 

@@ -12,13 +12,12 @@ export interface DreamState {
 export interface DriftEvent {
   timestamp: number
   glyphShifts: Array<{ glyphId: GlyphId; dx: number; dy: number }>
-  ringWeakPointShifts: Array<{ index: number; startAngle: number; endAngle: number }>
+  ringWeakPointShifts: Array<{ index: number; dStartAngle: number; dEndAngle: number }>
   loreFragment: string | null
 }
 
 export interface DreamResult {
-  drifted: boolean
-  driftEvent: DriftEvent | null
+  driftEvent: DriftEvent
   updatedSigil: Sigil
 }
 
@@ -173,10 +172,10 @@ export function checkDream(
   // Ring weak-point shifts
   const ringShift = MAX_RING_SHIFT_RAD * (1 + corruptionLevel)
   const ringWeakPointShifts = (sigil.bindingRing?.weakPoints ?? []).map(
-    (wp: RingWeakPoint, index: number) => ({
+    (_wp: RingWeakPoint, index: number) => ({
       index,
-      startAngle: wp.startAngle + randomInRange(-ringShift, ringShift),
-      endAngle: wp.endAngle + randomInRange(-ringShift, ringShift),
+      dStartAngle: randomInRange(-ringShift, ringShift),
+      dEndAngle: randomInRange(-ringShift, ringShift),
     }),
   )
 
@@ -195,7 +194,7 @@ export function checkDream(
 
   const updatedSigil = applyDrift(sigil, driftEvent)
 
-  return { drifted: true, driftEvent, updatedSigil }
+  return { driftEvent, updatedSigil }
 }
 
 // ─── Apply drift ──────────────────────────────────────────────────────────
@@ -219,9 +218,9 @@ export function applyDrift(sigil: Sigil, drift: DriftEvent): Sigil {
   let bindingRing = sigil.bindingRing
   if (bindingRing && drift.ringWeakPointShifts.length > 0) {
     const weakPoints = bindingRing.weakPoints.map((wp, i) => {
-      const shift = drift.ringWeakPointShifts.find(s => s.index === i)
+      const shift = drift.ringWeakPointShifts[i]
       if (!shift) return wp
-      return { ...wp, startAngle: shift.startAngle, endAngle: shift.endAngle }
+      return { ...wp, startAngle: wp.startAngle + shift.dStartAngle, endAngle: wp.endAngle + shift.dEndAngle }
     })
     bindingRing = { ...bindingRing, weakPoints }
   }
@@ -241,9 +240,10 @@ export function processDreamBatch(
   now: number,
   corruptionLevel: number,
   demonDomains: Record<string, DemonDomain[]>,
-): { updatedSigils: Sigil[]; updatedDreamStates: Record<string, DreamState> } {
+): { updatedSigils: Sigil[]; updatedDreamStates: Record<string, DreamState>; statesChanged: boolean } {
   const updatedSigils: Sigil[] = []
   const updatedDreamStates = { ...dreamStates }
+  let statesChanged = false
 
   for (const sigil of sigils) {
     if (!DREAMABLE_STATUSES.has(sigil.status)) continue
@@ -251,6 +251,7 @@ export function processDreamBatch(
     // Ensure dream state exists
     if (!updatedDreamStates[sigil.id]) {
       updatedDreamStates[sigil.id] = createDreamState(sigil.id, now)
+      statesChanged = true
       continue // Start tracking from now
     }
 
@@ -258,7 +259,7 @@ export function processDreamBatch(
     const domains = demonDomains[sigil.demonId] ?? []
     const result = checkDream(sigil, state, now, corruptionLevel, domains)
 
-    if (result && result.drifted && result.driftEvent) {
+    if (result) {
       updatedSigils.push(result.updatedSigil)
 
       const newHistory = [...state.driftHistory, result.driftEvent]
@@ -279,7 +280,7 @@ export function processDreamBatch(
     }
   }
 
-  return { updatedSigils, updatedDreamStates }
+  return { updatedSigils, updatedDreamStates, statesChanged: statesChanged || updatedSigils.length > 0 }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────

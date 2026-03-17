@@ -56,23 +56,29 @@ function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Typ
   return null
 }
 
+/** Flatten all sigils from grimoire pages into a single array. */
+function collectAllSigils(pages: import('@db/grimoire').GrimoirePage[]): Sigil[] {
+  const out: Sigil[] = []
+  for (const page of pages) {
+    for (const sigil of page.sigils) out.push(sigil)
+  }
+  return out
+}
+
 /** Run dream processing for all eligible sigils. */
 function processDreams(now: number): void {
-  const allSigils: Sigil[] = []
+  const store = useGrimoireStore.getState()
   const demonDomains: Record<string, import('@engine/sigil/Types').DemonDomain[]> = {}
-  for (const page of useGrimoireStore.getState().pages) {
-    for (const sigil of page.sigils) allSigils.push(sigil)
+  for (const page of store.pages) {
     try {
-      const demon = getDemon(page.demonId)
-      demonDomains[page.demonId] = demon.domains
+      demonDomains[page.demonId] = getDemon(page.demonId).domains
     } catch { /* ignore */ }
   }
   const corruptionLevel = useCorruptionStore.getState().corruption.level
-  const dreamStates = useGrimoireStore.getState().dreamStates
-  const { updatedSigils, updatedDreamStates } = processDreamBatch(
-    allSigils, dreamStates, now, corruptionLevel, demonDomains,
+  const { updatedSigils, updatedDreamStates, statesChanged } = processDreamBatch(
+    collectAllSigils(store.pages), store.dreamStates, now, corruptionLevel, demonDomains,
   )
-  if (updatedSigils.length > 0 || Object.keys(updatedDreamStates).length !== Object.keys(dreamStates).length) {
+  if (statesChanged) {
     useGrimoireStore.getState().applyDreamBatch(updatedSigils, updatedDreamStates)
   }
 }
@@ -543,11 +549,9 @@ async function init(): Promise<void> {
     decayTickCounter++
     if (decayTickCounter >= 60) {
       decayTickCounter = 0
-      const allSigils: Sigil[] = []
-      for (const page of useGrimoireStore.getState().pages) {
-        for (const sigil of page.sigils) allSigils.push(sigil)
-      }
-      const decayStates = useGrimoireStore.getState().decayStates
+      const grimoireState = useGrimoireStore.getState()
+      const allSigils = collectAllSigils(grimoireState.pages)
+      const decayStates = grimoireState.decayStates
       const { updatedSigils, updatedDecayStates } = processDecayBatch(
         allSigils, decayStates, now, currentTemporalMods,
       )
