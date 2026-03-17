@@ -67,8 +67,8 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   },
 
   recordFamiliarity(demonId: string, eventType: FamiliarityEventType) {
-    const { updatedState } = processInteraction(get().familiarityStates, demonId, eventType, Date.now())
+    const { updatedState, allStates } = processInteraction(get().familiarityStates, demonId, eventType, Date.now())
     grimoireDB.saveFamiliarity(updatedState)
-    set({ familiarityStates: { ...get().familiarityStates, [demonId]: updatedState } })
+    set({ familiarityStates: allStates })
   },
 }))

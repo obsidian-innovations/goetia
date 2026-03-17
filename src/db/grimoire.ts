@@ -230,12 +230,6 @@ export class GrimoireDB {
     this.persist()
   }
 
-  saveAllFamiliarity(states: Record<string, FamiliarityState>): void {
-    this.load()
-    this.familiarity = { ...states }
-    this.persist()
-  }
-
   // ─── Research reads ───────────────────────────────────────────────────────
 
   getResearch(demonId: string): ResearchState | null {
