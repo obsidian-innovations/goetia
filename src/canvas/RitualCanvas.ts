@@ -24,6 +24,7 @@ import type {
   RingResult,
   Sigil,
 } from '@engine/sigil/Types'
+import type { ConditionModifiers } from '@engine/ritual/ConditionsEngine'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -70,6 +71,9 @@ export class RitualCanvas {
 
   // Camera mode
   private _cameraMode = false
+
+  // Condition modifiers (from ritual environment)
+  private _conditionModifiers: ConditionModifiers | null = null
 
   // Pointer state
   private _isDrawing = false
@@ -137,11 +141,28 @@ export class RitualCanvas {
     if (!store.currentDemonId || !store.ringResult) return null
 
     const composer = new SigilComposer(store.currentDemonId)
-    composer.setSealIntegrity(store.sealIntegrity, store.completedConnections)
+
+    // Apply condition modifiers to seal integrity
+    let adjustedSealIntegrity = store.sealIntegrity
+    if (this._conditionModifiers) {
+      adjustedSealIntegrity = Math.max(0, Math.min(1, adjustedSealIntegrity - this._conditionModifiers.sealPenalty))
+    }
+    composer.setSealIntegrity(adjustedSealIntegrity, store.completedConnections)
+
     for (const g of store.placedGlyphs) {
       composer.addGlyph(g)
     }
-    composer.setBindingRing(store.ringResult)
+
+    // Apply condition modifiers to ring result
+    if (store.ringResult && this._conditionModifiers) {
+      const adjustedRing = {
+        ...store.ringResult,
+        overallStrength: Math.min(1, store.ringResult.overallStrength + this._conditionModifiers.ringBonus),
+      }
+      composer.setBindingRing(adjustedRing)
+    } else {
+      composer.setBindingRing(store.ringResult)
+    }
 
     const sigil = composer.compose()
     store.setComposedSigil(sigil)
@@ -184,6 +205,11 @@ export class RitualCanvas {
   /** Update the corruption visual effects level (0–1). */
   setCorruptionLevel(level: number): void {
     this._corruptionEffects.setLevel(level)
+  }
+
+  /** Set condition modifiers for the current ritual environment. */
+  setConditionModifiers(modifiers: ConditionModifiers | null): void {
+    this._conditionModifiers = modifiers
   }
 
   /** Enter camera mode: hide opaque atmospheric background so camera video shows through. */

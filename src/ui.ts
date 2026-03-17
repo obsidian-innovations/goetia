@@ -53,6 +53,7 @@ export interface UICallbacks {
   onAttemptPurification?: () => void
   onEnterCameraMode?: () => void
   onExitCameraMode?: () => void
+  onToggleMicrophone?: () => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -134,13 +135,14 @@ const STYLE = `
     font-family: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
   }
   #back-btn:hover { border-color: #7733aa; color: #cc88ff; }
-  #camera-btn {
+  #camera-btn, #mic-btn {
     background: transparent; border: 1px solid #225544; color: #77bb99;
     border-radius: 4px; padding: 0.3rem 0.75rem; cursor: pointer;
     font-family: inherit; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
     transition: border-color 0.2s, color 0.2s, background 0.2s;
   }
-  #camera-btn:hover { border-color: #44aa77; color: #99ddbb; }
+  #camera-btn:hover, #mic-btn:hover { border-color: #44aa77; color: #99ddbb; }
+  #mic-btn.active { border-color: #44aa77; background: rgba(20,60,40,0.7); color: #99ddbb; }
   #demon-name-label { text-align: center; color: #bb88ee; letter-spacing: 0.12em; font-size: 0.9rem; }
   #moon-indicator {
     font-size: 1.1rem; opacity: 0.6; transition: opacity 0.5s, text-shadow 0.5s;
@@ -1477,6 +1479,14 @@ export class UIManager {
     const headerSpacer = el('div')
     headerSpacer.style.flex = '1'
     header.appendChild(headerSpacer)
+
+    const micBtn = el('button', '', 'mic-btn')
+    micBtn.textContent = 'MIC'
+    micBtn.addEventListener('click', () => {
+      this._callbacks?.onToggleMicrophone?.()
+      micBtn.classList.toggle('active')
+    })
+    header.appendChild(micBtn)
 
     const camBtn = el('button', '', 'camera-btn')
     camBtn.textContent = 'CAM'
