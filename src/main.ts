@@ -33,6 +33,11 @@ import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
 import { processDreamBatch } from '@engine/sigil/DreamEngine'
 import type { Sigil } from '@engine/sigil/Types'
+import { createDefaultConditions, luminanceToDarkness, audioLevelToSilence, calculateConditionModifiers } from '@engine/ritual/ConditionsEngine'
+import type { RitualConditions } from '@engine/ritual/ConditionsEngine'
+import { analyzeFrame, getScryingTrigger } from '@engine/scrying/ScryingEngine'
+import { startMicrophone, stopMicrophone, analyzeAudioLevel, isMicrophoneActive } from './services/microphone'
+import { startCamera as startCameraService, stopCamera as stopCameraService, captureFrame } from './services/camera'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -50,6 +55,13 @@ let grimoireTickCounter = 0
 
 /** Permanent scars from purification — persists for session. */
 let permanentScars: PermanentScar[] = []
+
+/** Current ritual conditions — updated from sensors each tick. */
+let currentConditions: RitualConditions = createDefaultConditions()
+
+/** Video element for camera scrying (created when camera mode is active). */
+let scryingVideo: HTMLVideoElement | null = null
+let scryingStream: MediaStream | null = null
 
 /** Collect bound demons from active charging sessions. */
 function collectBoundDemons(): { ids: string[]; demons: import('@engine/sigil/Types').Demon[] } {
@@ -340,10 +352,31 @@ async function init(): Promise<void> {
 
     onEnterCameraMode() {
       ritualCanvas.enterCameraMode()
+      // Start camera stream for scrying analysis
+      startCameraService('environment').then(stream => {
+        if (!stream) return
+        scryingStream = stream
+        scryingVideo = document.createElement('video')
+        scryingVideo.srcObject = stream
+        scryingVideo.play().catch(() => {})
+      })
     },
 
     onExitCameraMode() {
       ritualCanvas.exitCameraMode()
+      if (scryingStream) {
+        stopCameraService(scryingStream)
+        scryingStream = null
+        scryingVideo = null
+      }
+    },
+
+    onToggleMicrophone() {
+      if (isMicrophoneActive()) {
+        stopMicrophone()
+      } else {
+        startMicrophone()
+      }
     },
 
     onAttemptPurification() {
@@ -625,6 +658,43 @@ async function init(): Promise<void> {
         useGrimoireStore.getState().updateSigilStatus(sigilId, 'spent')
         holdWindows.delete(sigilId)
       }
+    }
+
+    // ── Ritual conditions (every tick) ─────────────────────────────────────
+    {
+      const worldState = useWorldStore.getState()
+
+      // Update audio from microphone
+      const audio = analyzeAudioLevel()
+      if (audio) {
+        currentConditions.silence = audioLevelToSilence(audio.level)
+        currentConditions.rhythmic = audio.isRhythmic
+      }
+
+      // Update multipliers
+      currentConditions.thinPlaceMultiplier = worldState.getChargeMultiplier()
+      currentConditions.temporalMultiplier = currentTemporalMods.chargeMultiplier
+
+      // Camera scrying (only when camera mode is active)
+      if (scryingVideo && scryingVideo.readyState >= 2) {
+        const frame = captureFrame(scryingVideo)
+        if (frame) {
+          const analysis = analyzeFrame(frame.width, frame.height, frame.data)
+          currentConditions.darkness = luminanceToDarkness(analysis.avgLuminance)
+
+          // Check for scrying triggers
+          const corruptionLevel = useCorruptionStore.getState().corruption.level
+          const scrying = getScryingTrigger(analysis, corruptionLevel)
+          if (scrying.triggerType && scrying.loreText) {
+            const intensity = scrying.triggerType === 'veil_reveal' ? 'high' as const : 'medium' as const
+            ui.showWhisper(scrying.loreText, intensity)
+          }
+        }
+      }
+
+      // Apply condition modifiers to ritual canvas
+      const mods = calculateConditionModifiers(currentConditions)
+      ritualCanvas.setConditionModifiers(mods)
     }
 
     // ── Sigil decay (every 60 seconds) ────────────────────────────────────
