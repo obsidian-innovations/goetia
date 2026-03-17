@@ -1,4 +1,5 @@
 import type { Demon, DemonRank } from '@engine/sigil/Types'
+import { getRankPower } from '@engine/pvp/ClashResolver'
 import type { PermanentScar } from './PurificationEngine'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -21,18 +22,6 @@ const VESSEL_LABELS: Record<string, string> = {
   GLYPH: 'MARK',
   RING: 'CHAIN',
   Bind: 'Submit',
-}
-
-/** Rank priority for selecting dominant demon (higher = more dominant). */
-const RANK_PRIORITY: Record<DemonRank, number> = {
-  King: 8,
-  Prince: 7,
-  Duke: 6,
-  Marquis: 5,
-  Earl: 4,
-  Knight: 3,
-  President: 3,
-  Baron: 2,
 }
 
 // ─── Vessel perspective whisper pools ─────────────────────────────────────
@@ -97,7 +86,7 @@ export function getVesselPerspective(
 
   for (const demon of demons) {
     if (!boundDemonIds.includes(demon.id)) continue
-    const priority = RANK_PRIORITY[demon.rank] ?? 0
+    const priority = getRankPower(demon.rank)
     if (priority > highestPriority) {
       highestPriority = priority
       dominantDemonId = demon.id
@@ -107,7 +96,7 @@ export function getVesselPerspective(
   return {
     isActive: true,
     dominantDemonId,
-    labelReplacements: { ...VESSEL_LABELS },
+    labelReplacements: VESSEL_LABELS,
     postPurificationFlickers: hasPostPurificationFlicker(scars),
   }
 }

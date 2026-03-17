@@ -804,6 +804,9 @@ export class UIManager {
   private _moonIndicator: HTMLDivElement | null = null
   private _lastMoonPhase: string = ''
   private _lastWitching: boolean = false
+  // Cached button references for vessel perspective
+  private _phaseBtns: Record<string, HTMLElement | null> = {}
+  private _bindBtn: HTMLElement | null = null
 
   constructor() {
     this._injectStyles()
@@ -1305,15 +1308,14 @@ export class UIManager {
 
   /** Apply vessel perspective label replacements and flicker. */
   setVesselPerspective(perspective: VesselPerspectiveState): void {
-    // Replace phase button labels
+    // Replace phase button labels (using cached refs)
     for (const phase of ['SEAL', 'GLYPH', 'RING'] as const) {
-      const btn = this._root.querySelector<HTMLElement>(`#phase-btn-${phase}`)
+      const btn = this._phaseBtns[phase]
       if (btn) btn.textContent = perspective.labelReplacements[phase] ?? phase
     }
 
     // Replace BIND button label
-    const bindBtn = this._root.querySelector<HTMLElement>('#bind-btn')
-    if (bindBtn) bindBtn.textContent = perspective.labelReplacements['Bind'] ?? 'Bind'
+    if (this._bindBtn) this._bindBtn.textContent = perspective.labelReplacements['Bind'] ?? 'Bind'
 
     // Post-purification flicker (2% chance per frame via CSS animation)
     const ritual = this._screens.ritual
@@ -1505,6 +1507,7 @@ export class UIManager {
         this._callbacks?.onPhaseChange(phase)
         this._updatePhaseButtons(phase)
       })
+      this._phaseBtns[phase] = btn
       toolbar.appendChild(btn)
     }
 
@@ -1538,10 +1541,10 @@ export class UIManager {
     }
     toolbar.appendChild(diffSelector)
 
-    const bindBtn = el('button', '', 'bind-btn')
-    bindBtn.textContent = 'Bind'
-    bindBtn.addEventListener('click', () => this._callbacks?.onBind())
-    toolbar.appendChild(bindBtn)
+    this._bindBtn = el('button', '', 'bind-btn')
+    this._bindBtn.textContent = 'Bind'
+    this._bindBtn.addEventListener('click', () => this._callbacks?.onBind())
+    toolbar.appendChild(this._bindBtn)
 
     screen.appendChild(toolbar)
     return screen

@@ -51,6 +51,20 @@ let grimoireTickCounter = 0
 /** Permanent scars from purification — persists for session. */
 let permanentScars: PermanentScar[] = []
 
+/** Collect bound demons from active charging sessions. */
+function collectBoundDemons(): { ids: string[]; demons: import('@engine/sigil/Types').Demon[] } {
+  const ids: string[] = []
+  const demons: import('@engine/sigil/Types').Demon[] = []
+  for (const [, cs] of useChargingStore.getState().activeCharges) {
+    try {
+      const d = getDemon(cs.demonId)
+      ids.push(d.id)
+      demons.push(d)
+    } catch { /* ignore */ }
+  }
+  return { ids, demons }
+}
+
 /** Look up a sigil and its demon from the grimoire by sigilId. */
 function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Types').Sigil; demon: import('@engine/sigil/Types').Demon } | null {
   const pages = useGrimoireStore.getState().pages
@@ -349,8 +363,8 @@ async function init(): Promise<void> {
       if (result.outcome === 'success') {
         // Reset corruption to 0.30 and clear vessel
         useCorruptionStore.getState().setVessel(null)
-        // Corruption engine doesn't have a "set level" — add a negative source to approximate
-        // For now, the purification narrative indicates recovery
+        // Persist permanent scars for vessel perspective (post-purification flicker etc.)
+        permanentScars = result.permanentScars
         haptic('sigilSettle')
         audioManager.play('sigilSettle')
       } else {
@@ -461,20 +475,12 @@ async function init(): Promise<void> {
     }
 
     // Compute vessel perspective (UI label replacements at high corruption)
-    {
-      const boundDemonIds: string[] = []
-      const boundDemons: import('@engine/sigil/Types').Demon[] = []
-      for (const [, cs] of useChargingStore.getState().activeCharges) {
-        try {
-          const d = getDemon(cs.demonId)
-          boundDemonIds.push(d.id)
-          boundDemons.push(d)
-        } catch { /* ignore */ }
-      }
+    if (level >= 0.70 || permanentScars.length > 0) {
+      const { ids: boundDemonIds, demons: boundDemons } = collectBoundDemons()
       const perspective = getVesselPerspective(level, boundDemonIds, boundDemons, permanentScars)
       ui.setVesselPerspective(perspective)
 
-      // Vessel whisper at high corruption (triggered by subscription, not polling)
+      // Vessel whisper at high corruption
       if (perspective.isActive && Math.random() < 0.15) {
         const dominantName = perspective.dominantDemonId
           ? boundDemons.find(d => d.id === perspective.dominantDemonId)?.name
@@ -491,13 +497,7 @@ async function init(): Promise<void> {
       // Create vessel state for PvP encounter system
       const playerPos = useWorldStore.getState().playerPosition
       const latLng = playerPos ? { lat: playerPos.lat, lng: playerPos.lng } : null
-      // Gather bound demons from active charges
-      const boundDemons: import('@engine/sigil/Types').Demon[] = []
-      const charges = useChargingStore.getState().activeCharges
-      for (const [, chargeState] of charges) {
-        try { boundDemons.push(getDemon(chargeState.demonId)) } catch { /* ignore */ }
-      }
-      const vessel = createVesselState('local', latLng, boundDemons, 0.5, Date.now())
+      const vessel = createVesselState('local', latLng, collectBoundDemons().demons, 0.5, Date.now())
       useCorruptionStore.getState().setVessel(vessel)
     }
     _wasVessel = isVesselNow
