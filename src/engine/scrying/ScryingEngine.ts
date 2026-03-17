@@ -90,33 +90,31 @@ export function analyzeFrame(
   const avgLuminance = luminanceSum / pixelCount
   const darkness = Math.max(0, Math.min(1, 1 - avgLuminance / 255))
 
-  // Sobel edge detection (3x3 kernel)
+  // Sobel edge detection (3x3 kernel) — compute once, reuse for circle detection
+  const innerW = width - 2
+  const innerH = height - 2
+  const isEdge = new Uint8Array(innerW * innerH)
   let edgesDetected = 0
+
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x
-
-      // Sobel X kernel
       const gx =
         -gray[idx - width - 1] + gray[idx - width + 1] +
         -2 * gray[idx - 1] + 2 * gray[idx + 1] +
         -gray[idx + width - 1] + gray[idx + width + 1]
-
-      // Sobel Y kernel
       const gy =
         -gray[idx - width - 1] - 2 * gray[idx - width] - gray[idx - width + 1] +
         gray[idx + width - 1] + 2 * gray[idx + width] + gray[idx + width + 1]
 
-      const magnitude = Math.sqrt(gx * gx + gy * gy)
-      if (magnitude > EDGE_THRESHOLD) {
+      if (Math.sqrt(gx * gx + gy * gy) > EDGE_THRESHOLD) {
+        isEdge[(y - 1) * innerW + (x - 1)] = 1
         edgesDetected++
       }
     }
   }
 
-  // Simple circular feature detection: count edge pixels that lie
-  // approximately on circles centered near the frame center.
-  // This is a simplified Hough-like approach.
+  // Circle detection: count edge pixels on circles centered near the frame center
   const cx = width / 2
   const cy = height / 2
   const minRadius = Math.min(width, height) * 0.1
@@ -125,16 +123,7 @@ export function analyzeFrame(
 
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      const idx = y * width + x
-      const gx =
-        -gray[idx - width - 1] + gray[idx - width + 1] +
-        -2 * gray[idx - 1] + 2 * gray[idx + 1] +
-        -gray[idx + width - 1] + gray[idx + width + 1]
-      const gy =
-        -gray[idx - width - 1] - 2 * gray[idx - width] - gray[idx - width + 1] +
-        gray[idx + width - 1] + 2 * gray[idx + width] + gray[idx + width + 1]
-
-      if (Math.sqrt(gx * gx + gy * gy) <= EDGE_THRESHOLD) continue
+      if (!isEdge[(y - 1) * innerW + (x - 1)]) continue
 
       const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
       if (dist < minRadius || dist > maxRadius) continue
@@ -144,7 +133,6 @@ export function analyzeFrame(
     }
   }
 
-  // Count radius buckets with significant edge density as "circles"
   const minBucketCount = Math.max(10, pixelCount * 0.001)
   let circlesDetected = 0
   for (const count of radiusBuckets.values()) {

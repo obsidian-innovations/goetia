@@ -33,7 +33,7 @@ import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { processDecayBatch } from '@engine/sigil/DecayEngine'
 import { processDreamBatch } from '@engine/sigil/DreamEngine'
 import type { Sigil } from '@engine/sigil/Types'
-import { createDefaultConditions, velocityToMovement, luminanceToDarkness, audioLevelToSilence, calculateConditionModifiers } from '@engine/ritual/ConditionsEngine'
+import { createDefaultConditions, luminanceToDarkness, audioLevelToSilence, calculateConditionModifiers } from '@engine/ritual/ConditionsEngine'
 import type { RitualConditions } from '@engine/ritual/ConditionsEngine'
 import { analyzeFrame, getScryingTrigger } from '@engine/scrying/ScryingEngine'
 import { startMicrophone, stopMicrophone, analyzeAudioLevel, isMicrophoneActive } from './services/microphone'
@@ -662,9 +662,7 @@ async function init(): Promise<void> {
 
     // ── Ritual conditions (every tick) ─────────────────────────────────────
     {
-      // Update movement from geolocation (speed not yet exposed by geo service; placeholder)
       const worldState = useWorldStore.getState()
-      currentConditions.movement = velocityToMovement(null)
 
       // Update audio from microphone
       const audio = analyzeAudioLevel()

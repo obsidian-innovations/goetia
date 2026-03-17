@@ -26,6 +26,12 @@ export function stopCamera(stream: MediaStream): void {
   }
 }
 
+/** Cached canvas for frame capture — avoid re-creating DOM element each tick. */
+let _captureCanvas: HTMLCanvasElement | null = null
+let _captureCtx: CanvasRenderingContext2D | null = null
+let _captureW = 0
+let _captureH = 0
+
 /**
  * Capture a single frame from a video element as RGBA pixel data.
  * Downscales to targetWidth×targetHeight for efficient analysis.
@@ -36,13 +42,17 @@ export function captureFrame(
   targetWidth = 160,
   targetHeight = 120,
 ): { width: number; height: number; data: Uint8ClampedArray } | null {
-  const canvas = document.createElement('canvas')
-  canvas.width = targetWidth
-  canvas.height = targetHeight
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
+  if (!_captureCanvas || _captureW !== targetWidth || _captureH !== targetHeight) {
+    _captureCanvas = document.createElement('canvas')
+    _captureCanvas.width = targetWidth
+    _captureCanvas.height = targetHeight
+    _captureCtx = _captureCanvas.getContext('2d')
+    _captureW = targetWidth
+    _captureH = targetHeight
+  }
+  if (!_captureCtx) return null
 
-  ctx.drawImage(video, 0, 0, targetWidth, targetHeight)
-  const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight)
+  _captureCtx.drawImage(video, 0, 0, targetWidth, targetHeight)
+  const imageData = _captureCtx.getImageData(0, 0, targetWidth, targetHeight)
   return { width: targetWidth, height: targetHeight, data: imageData.data }
 }

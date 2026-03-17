@@ -131,17 +131,7 @@ export function isMicrophoneActive(): boolean {
 function detectRhythm(): boolean {
   if (energyBuffer.length < 6) return false
 
-  // Count onsets: frames where energy jumps significantly above the previous frame
-  let onsets = 0
-  for (let i = 1; i < energyBuffer.length; i++) {
-    if (energyBuffer[i - 1] > 0.01 && energyBuffer[i] / energyBuffer[i - 1] > ONSET_THRESHOLD) {
-      onsets++
-    }
-  }
-
-  if (onsets < MIN_ONSETS_FOR_RHYTHM) return false
-
-  // Check regularity: compute inter-onset intervals and see if they're roughly even
+  // Single pass: find onset positions
   const onsetPositions: number[] = []
   for (let i = 1; i < energyBuffer.length; i++) {
     if (energyBuffer[i - 1] > 0.01 && energyBuffer[i] / energyBuffer[i - 1] > ONSET_THRESHOLD) {
@@ -149,8 +139,9 @@ function detectRhythm(): boolean {
     }
   }
 
-  if (onsetPositions.length < 3) return false
+  if (onsetPositions.length < MIN_ONSETS_FOR_RHYTHM) return false
 
+  // Check regularity via coefficient of variation of inter-onset intervals
   const intervals: number[] = []
   for (let i = 1; i < onsetPositions.length; i++) {
     intervals.push(onsetPositions[i] - onsetPositions[i - 1])
@@ -158,8 +149,7 @@ function detectRhythm(): boolean {
 
   const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length
   const variance = intervals.reduce((s, iv) => s + (iv - avgInterval) ** 2, 0) / intervals.length
-  const cv = Math.sqrt(variance) / avgInterval // coefficient of variation
+  const cv = Math.sqrt(variance) / avgInterval
 
-  // Rhythmic if intervals are reasonably regular (CV < 0.5)
   return cv < 0.5
 }

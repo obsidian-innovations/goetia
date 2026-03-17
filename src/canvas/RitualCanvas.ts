@@ -142,24 +142,24 @@ export class RitualCanvas {
 
     const composer = new SigilComposer(store.currentDemonId)
 
-    // Apply condition modifiers to seal integrity
-    let adjustedSealIntegrity = store.sealIntegrity
-    if (this._conditionModifiers) {
-      adjustedSealIntegrity = Math.max(0, Math.min(1, adjustedSealIntegrity - this._conditionModifiers.sealPenalty))
-    }
-    composer.setSealIntegrity(adjustedSealIntegrity, store.completedConnections)
+    // Apply condition modifiers to seal and ring
+    const sealPenalty = this._conditionModifiers?.sealPenalty ?? 0
+    const ringBonus = this._conditionModifiers?.ringBonus ?? 0
+
+    composer.setSealIntegrity(
+      Math.max(0, Math.min(1, store.sealIntegrity - sealPenalty)),
+      store.completedConnections,
+    )
 
     for (const g of store.placedGlyphs) {
       composer.addGlyph(g)
     }
 
-    // Apply condition modifiers to ring result
-    if (store.ringResult && this._conditionModifiers) {
-      const adjustedRing = {
+    if (store.ringResult && ringBonus > 0) {
+      composer.setBindingRing({
         ...store.ringResult,
-        overallStrength: Math.min(1, store.ringResult.overallStrength + this._conditionModifiers.ringBonus),
-      }
-      composer.setBindingRing(adjustedRing)
+        overallStrength: Math.min(1, store.ringResult.overallStrength + ringBonus),
+      })
     } else {
       composer.setBindingRing(store.ringResult)
     }
