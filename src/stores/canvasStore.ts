@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import type {
   ConnectionResult,
+  DrawingPhase,
   GlyphDifficulty,
   GlyphId,
   IntentCoherenceResult,
@@ -9,15 +10,15 @@ import type {
   Sigil,
 } from '@engine/sigil/Types'
 
-// ─── Drawing phase ─────────────────────────────────────────────────────────
-
-export type DrawingPhase = 'SEAL' | 'GLYPH' | 'RING'
+export type { DrawingPhase } from '@engine/sigil/Types'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
 interface CanvasState {
   currentDemonId: string | null
   currentPhase: DrawingPhase
+  /** Ordered history of phase visits (for inverted rite detection). */
+  phaseHistory: DrawingPhase[]
   glyphDifficulty: GlyphDifficulty
   completedConnections: ConnectionResult[]
   sealIntegrity: number
@@ -48,6 +49,7 @@ type CanvasStore = CanvasState & CanvasActions
 const INITIAL_STATE: CanvasState = {
   currentDemonId: null,
   currentPhase: 'SEAL',
+  phaseHistory: ['SEAL'],
   glyphDifficulty: 'normal',
   completedConnections: [],
   sealIntegrity: 0,
@@ -101,7 +103,10 @@ export const useCanvasStore = createStore<CanvasStore>((set) => ({
   },
 
   setPhase(phase: DrawingPhase) {
-    set({ currentPhase: phase })
+    set(state => ({
+      currentPhase: phase,
+      phaseHistory: [...state.phaseHistory, phase],
+    }))
   },
 
   setGlyphDifficulty(difficulty: GlyphDifficulty) {

@@ -4,6 +4,7 @@ import { listDemons } from '@engine/demons/DemonRegistry'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
+import type { VesselPerspectiveState } from '@engine/corruption/VesselPerspective'
 import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
@@ -757,6 +758,16 @@ const STYLE = `
     font-family: inherit; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;
   }
   #vessel-warning-dismiss:hover { border-color: #ff4444; color: #ffaaaa; }
+
+  /* Post-purification flicker — random opacity jitter */
+  @keyframes purification-flicker {
+    0%, 96% { opacity: 1; }
+    97% { opacity: 0.85; }
+    98% { opacity: 0.95; }
+    99% { opacity: 0.80; }
+    100% { opacity: 1; }
+  }
+  .s-post-purification-flicker { animation: purification-flicker 3s infinite; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -1290,6 +1301,25 @@ export class UIManager {
   /** Show the full-screen vessel warning. */
   showVesselWarning(): void {
     this._vesselWarning?.classList.add('visible')
+  }
+
+  /** Apply vessel perspective label replacements and flicker. */
+  setVesselPerspective(perspective: VesselPerspectiveState): void {
+    // Replace phase button labels
+    for (const phase of ['SEAL', 'GLYPH', 'RING'] as const) {
+      const btn = this._root.querySelector<HTMLElement>(`#phase-btn-${phase}`)
+      if (btn) btn.textContent = perspective.labelReplacements[phase] ?? phase
+    }
+
+    // Replace BIND button label
+    const bindBtn = this._root.querySelector<HTMLElement>('#bind-btn')
+    if (bindBtn) bindBtn.textContent = perspective.labelReplacements['Bind'] ?? 'Bind'
+
+    // Post-purification flicker (2% chance per frame via CSS animation)
+    const ritual = this._screens.ritual
+    if (ritual) {
+      ritual.classList.toggle('s-post-purification-flicker', perspective.postPurificationFlickers)
+    }
   }
 
   destroy(): void {

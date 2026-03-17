@@ -24,6 +24,9 @@ import { calculateMisfire } from '@engine/pvp/MisfireEngine'
 import { createHoldWindowState, isCollapsed } from '@engine/charging/HoldWindow'
 import { createVesselState } from '@engine/corruption/VesselState'
 import { attemptPurification } from '@engine/corruption/PurificationEngine'
+import { detectInvertedRite, composeInvertedSigil, evaluateBrokenRite } from '@engine/sigil/InvertedRiteEngine'
+import { getVesselPerspective, generateVesselWhisper } from '@engine/corruption/VesselPerspective'
+import type { PermanentScar } from '@engine/corruption/PurificationEngine'
 import { getBestSigil, createGrimoireMemory, recordRitual, tickGrimoire } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
@@ -44,6 +47,9 @@ let decayTickCounter = 0
 
 /** Counter for grimoire behavior ticks — runs every 300 ticks (5 minutes). */
 let grimoireTickCounter = 0
+
+/** Permanent scars from purification — persists for session. */
+let permanentScars: PermanentScar[] = []
 
 /** Look up a sigil and its demon from the grimoire by sigilId. */
 function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Types').Sigil; demon: import('@engine/sigil/Types').Demon } | null {
@@ -162,11 +168,34 @@ async function init(): Promise<void> {
     },
 
     onBind() {
-      const sigil = ritualCanvas.composeSigil()
+      let sigil = ritualCanvas.composeSigil()
       if (!sigil) {
         haptic('misfire')
         audioManager.play('misfire')
         return
+      }
+
+      // Check for inverted rite (RING before SEAL)
+      const { phaseHistory } = useCanvasStore.getState()
+      let invertedCorruptionMultiplier = 1.0
+      if (detectInvertedRite(phaseHistory)) {
+        const invertedResult = composeInvertedSigil(sigil)
+        sigil = invertedResult.sigil
+        invertedCorruptionMultiplier = invertedResult.corruptionMultiplier
+      }
+
+      // Check for broken rite (weak seal + ring = sacrificial purification)
+      const brokenRite = evaluateBrokenRite(
+        sigil.sealIntegrity,
+        sigil.bindingRing?.overallStrength ?? 0,
+      )
+      if (brokenRite) {
+        // Apply corruption reduction from the sacrificial rite
+        useCorruptionStore.getState().addCorruption({
+          type: 'sigil_cast',
+          amount: -brokenRite.corruptionReduction,
+          timestamp: Date.now(),
+        })
       }
 
       // Transition to complete and persist
@@ -214,7 +243,7 @@ async function init(): Promise<void> {
           useChargingStore.getState().addDemand(demon.id, demand)
 
           // Casting a sigil adds corruption proportional to the demon's rank (scaled by temporal modifiers)
-          const castAmount = getCorruptionAmount('sigil_cast', demon.rank) * currentTemporalMods.corruptionMultiplier
+          const castAmount = getCorruptionAmount('sigil_cast', demon.rank) * currentTemporalMods.corruptionMultiplier * invertedCorruptionMultiplier
           useCorruptionStore.getState().addCorruption({ type: 'sigil_cast', amount: castAmount, timestamp: Date.now() })
 
           ui.showCharging(demon.name)
@@ -429,6 +458,29 @@ async function init(): Promise<void> {
       const w = corruptionState.pendingWhisper
       ui.showWhisper(w.text, w.intensity)
       useCorruptionStore.getState().clearWhisper()
+    }
+
+    // Compute vessel perspective (UI label replacements at high corruption)
+    {
+      const boundDemonIds: string[] = []
+      const boundDemons: import('@engine/sigil/Types').Demon[] = []
+      for (const [, cs] of useChargingStore.getState().activeCharges) {
+        try {
+          const d = getDemon(cs.demonId)
+          boundDemonIds.push(d.id)
+          boundDemons.push(d)
+        } catch { /* ignore */ }
+      }
+      const perspective = getVesselPerspective(level, boundDemonIds, boundDemons, permanentScars)
+      ui.setVesselPerspective(perspective)
+
+      // Vessel whisper at high corruption (triggered by subscription, not polling)
+      if (perspective.isActive && Math.random() < 0.15) {
+        const dominantName = perspective.dominantDemonId
+          ? boundDemons.find(d => d.id === perspective.dominantDemonId)?.name
+          : undefined
+        ui.showWhisper(generateVesselWhisper(dominantName), 'high')
+      }
     }
 
     // Show vessel warning once when transitioning to vessel

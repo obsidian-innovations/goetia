@@ -1,3 +1,7 @@
+// ─── Drawing phase ────────────────────────────────────────────────────────
+
+export type DrawingPhase = 'SEAL' | 'GLYPH' | 'RING'
+
 // ─── Primitive geometry ────────────────────────────────────────────────────
 
 export type Point = {
