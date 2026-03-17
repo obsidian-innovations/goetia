@@ -3,6 +3,7 @@ import type { ResearchState } from '@engine/research/ResearchEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
 import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
 import type { DreamState } from '@engine/sigil/DreamEngine'
+import type { GrimoireMemory } from '@engine/grimoire/PalimpsestEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ interface GrimoireData {
   decay?: Record<string, DecayState>
   familiarity?: Record<string, FamiliarityState>
   dream?: Record<string, DreamState>
+  grimoireMemory?: GrimoireMemory
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -44,6 +46,7 @@ export class GrimoireDB {
   private decay: Record<string, DecayState> = {}
   private familiarity: Record<string, FamiliarityState> = {}
   private dream: Record<string, DreamState> = {}
+  private grimoireMemory: GrimoireMemory | null = null
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -56,6 +59,7 @@ export class GrimoireDB {
         this.decay = {}
         this.familiarity = {}
         this.dream = {}
+        this.grimoireMemory = null
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -66,12 +70,14 @@ export class GrimoireDB {
         this.decay = {}
         this.familiarity = {}
         this.dream = {}
+        this.grimoireMemory = null
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
         this.decay = parsed.decay ?? {}
         this.familiarity = parsed.familiarity ?? {}
         this.dream = parsed.dream ?? {}
+        this.grimoireMemory = parsed.grimoireMemory ?? null
       }
     } catch {
       this.pages = []
@@ -79,12 +85,13 @@ export class GrimoireDB {
       this.decay = {}
       this.familiarity = {}
       this.dream = {}
+      this.grimoireMemory = null
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream, grimoireMemory: this.grimoireMemory ?? undefined }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -189,6 +196,7 @@ export class GrimoireDB {
     this.decay = {}
     this.familiarity = {}
     this.dream = {}
+    this.grimoireMemory = null
     this.persist()
   }
 
@@ -259,6 +267,19 @@ export class GrimoireDB {
     this.dream = { ...dreamStates }
     this.persist()
     return this.pages
+  }
+
+  // ─── Grimoire memory ─────────────────────────────────────────────────────
+
+  getGrimoireMemory(): GrimoireMemory | null {
+    this.load()
+    return this.grimoireMemory
+  }
+
+  saveGrimoireMemory(memory: GrimoireMemory): void {
+    this.load()
+    this.grimoireMemory = memory
+    this.persist()
   }
 
   // ─── Research reads ───────────────────────────────────────────────────────
