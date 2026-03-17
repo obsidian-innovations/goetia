@@ -27,6 +27,8 @@ import { attemptPurification } from '@engine/corruption/PurificationEngine'
 import { getBestSigil } from '@engine/grimoire'
 import { getTemporalModifiers } from '@engine/temporal/TemporalEngine'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
+import { processDecayBatch } from '@engine/sigil/DecayEngine'
+import type { Sigil } from '@engine/sigil/Types'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -35,6 +37,9 @@ let currentTemporalMods: TemporalModifiers = getTemporalModifiers(Date.now())
 
 /** Hold window states for fully charged sigils, keyed by sigilId */
 const holdWindows = new Map<string, import('@engine/charging/HoldWindow').HoldWindowState>()
+
+/** Counter for decay processing — runs every 60 ticks (60 seconds). */
+let decayTickCounter = 0
 
 /** Look up a sigil and its demon from the grimoire by sigilId. */
 function findSigilWithDemon(sigilId: string): { sigil: import('@engine/sigil/Types').Sigil; demon: import('@engine/sigil/Types').Demon } | null {
@@ -139,8 +144,12 @@ async function init(): Promise<void> {
           const demon = getDemon(demonId)
           useChargingStore.getState().startCharging(completedSigil, demon)
 
-          // Generate initial demand
-          const demand = generateDemand(demon, completedSigil.overallIntegrity)
+          // Record familiarity interaction
+          useGrimoireStore.getState().recordFamiliarity(demonId, 'ritual_complete')
+
+          // Generate initial demand (with familiarity personalization)
+          const famTier = useGrimoireStore.getState().familiarityStates[demonId]?.tier
+          const demand = generateDemand(demon, completedSigil.overallIntegrity, famTier)
           useChargingStore.getState().addDemand(demon.id, demand)
 
           // Casting a sigil adds corruption proportional to the demon's rank (scaled by temporal modifiers)
@@ -159,12 +168,16 @@ async function init(): Promise<void> {
 
     onFulfillDemand(demandId: string) {
       useChargingStore.getState().fulfillDemand(demandId)
+      // Find which demon this demand belongs to and record familiarity
+      const demonId = useCanvasStore.getState().currentDemonId
+      if (demonId) useGrimoireStore.getState().recordFamiliarity(demonId, 'demand_fulfilled')
     },
 
     onIgnoreDemand(_demandId: string) {
       // Ignoring a demand adds corruption based on the current demon's rank
       const demonId = useCanvasStore.getState().currentDemonId
       if (demonId) {
+        useGrimoireStore.getState().recordFamiliarity(demonId, 'demand_ignored')
         try {
           const demon = getDemon(demonId)
           const amount = getCorruptionAmount('demand_ignored', demon.rank) * currentTemporalMods.corruptionMultiplier
@@ -179,6 +192,7 @@ async function init(): Promise<void> {
       const sigil = page?.sigils.find(s => s.id === _sigilId)
       if (sigil) {
         useResearchStore.getState().addProgress(demonId, studiedSigil(sigil))
+        useGrimoireStore.getState().recordFamiliarity(demonId, 'study')
         ui.refreshDemonGrid()
       }
     },
@@ -202,6 +216,7 @@ async function init(): Promise<void> {
       if (!found) return
       const hex = usePvPStore.getState().castHex(targetLabel, found.sigil, found.demon)
       networkService.sendHex(targetLabel, hex)
+      useGrimoireStore.getState().recordFamiliarity(found.demon.id, 'hex_cast')
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
     },
@@ -468,6 +483,7 @@ async function init(): Promise<void> {
 
         // Transition to resting when fully charged and start hold window
         if (chargeState.chargeProgress >= 1) {
+          useGrimoireStore.getState().recordFamiliarity(chargeState.demonId, 'charge_complete')
           const pages = useGrimoireStore.getState().pages
           for (const page of pages) {
             for (const sigil of page.sigils) {
@@ -495,6 +511,26 @@ async function init(): Promise<void> {
         // Sigil has fully destabilised — mark as spent
         useGrimoireStore.getState().updateSigilStatus(sigilId, 'spent')
         holdWindows.delete(sigilId)
+      }
+    }
+
+    // ── Sigil decay (every 60 seconds) ────────────────────────────────────
+    decayTickCounter++
+    if (decayTickCounter >= 60) {
+      decayTickCounter = 0
+      const allSigils: Sigil[] = []
+      for (const page of useGrimoireStore.getState().pages) {
+        for (const sigil of page.sigils) allSigils.push(sigil)
+      }
+      const decayStates = useGrimoireStore.getState().decayStates
+      const { updatedSigils, updatedDecayStates } = processDecayBatch(
+        allSigils, decayStates, now, currentTemporalMods,
+      )
+      if (updatedSigils.length > 0) {
+        useGrimoireStore.getState().applyDecayBatch(updatedSigils, updatedDecayStates)
+      } else if (Object.keys(updatedDecayStates).length !== Object.keys(decayStates).length) {
+        // New decay states created (no sigils decayed yet, but states need persisting)
+        useGrimoireStore.getState().applyDecayBatch([], updatedDecayStates)
       }
     }
 

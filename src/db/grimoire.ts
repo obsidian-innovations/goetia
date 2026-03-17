@@ -1,5 +1,7 @@
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { ResearchState } from '@engine/research/ResearchEngine'
+import type { DecayState } from '@engine/sigil/DecayEngine'
+import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -13,6 +15,8 @@ export type GrimoirePage = {
 interface GrimoireData {
   pages: GrimoirePage[]
   research: Record<string, ResearchState>
+  decay?: Record<string, DecayState>
+  familiarity?: Record<string, FamiliarityState>
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -35,6 +39,8 @@ const STORAGE_KEY = 'goetia:grimoire'
 export class GrimoireDB {
   private pages: GrimoirePage[] = []
   private research: Record<string, ResearchState> = {}
+  private decay: Record<string, DecayState> = {}
+  private familiarity: Record<string, FamiliarityState> = {}
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -44,6 +50,8 @@ export class GrimoireDB {
       if (!raw) {
         this.pages = []
         this.research = {}
+        this.decay = {}
+        this.familiarity = {}
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -51,19 +59,25 @@ export class GrimoireDB {
       if (Array.isArray(parsed)) {
         this.pages = parsed
         this.research = {}
+        this.decay = {}
+        this.familiarity = {}
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
+        this.decay = parsed.decay ?? {}
+        this.familiarity = parsed.familiarity ?? {}
       }
     } catch {
       this.pages = []
       this.research = {}
+      this.decay = {}
+      this.familiarity = {}
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -97,6 +111,26 @@ export class GrimoireDB {
 
   saveSigil(sigil: Sigil): void {
     this.load()
+    this._upsertSigil(sigil)
+    this.persist()
+  }
+
+  saveSigilsBatch(sigils: Sigil[]): void {
+    this.load()
+    for (const sigil of sigils) this._upsertSigil(sigil)
+    this.persist()
+  }
+
+  /** Atomically persist sigils and decay states in a single load/persist cycle. */
+  saveDecayBatch(sigils: Sigil[], decayStates: Record<string, DecayState>): GrimoirePage[] {
+    this.load()
+    for (const sigil of sigils) this._upsertSigil(sigil)
+    this.decay = { ...decayStates }
+    this.persist()
+    return this.pages
+  }
+
+  private _upsertSigil(sigil: Sigil): void {
     let page = this.pages.find(p => p.demonId === sigil.demonId)
     if (!page) {
       page = { demonId: sigil.demonId, sigils: [] }
@@ -108,7 +142,6 @@ export class GrimoireDB {
     } else {
       page.sigils.push(sigil)
     }
-    this.persist()
   }
 
   updateSigilStatus(sigilId: string, newStatus: SigilStatus): void {
@@ -146,6 +179,54 @@ export class GrimoireDB {
   clearAll(): void {
     this.pages = []
     this.research = {}
+    this.decay = {}
+    this.familiarity = {}
+    this.persist()
+  }
+
+  // ─── Decay reads ─────────────────────────────────────────────────────────
+
+  getDecayState(sigilId: string): DecayState | null {
+    this.load()
+    return this.decay[sigilId] ?? null
+  }
+
+  getAllDecayStates(): Record<string, DecayState> {
+    this.load()
+    return { ...this.decay }
+  }
+
+  // ─── Decay writes ────────────────────────────────────────────────────────
+
+  saveDecayState(state: DecayState): void {
+    this.load()
+    this.decay[state.sigilId] = state
+    this.persist()
+  }
+
+  saveAllDecayStates(states: Record<string, DecayState>): void {
+    this.load()
+    this.decay = { ...states }
+    this.persist()
+  }
+
+  // ─── Familiarity reads ─────────────────────────────────────────────────────
+
+  getFamiliarity(demonId: string): FamiliarityState | null {
+    this.load()
+    return this.familiarity[demonId] ?? null
+  }
+
+  getAllFamiliarity(): Record<string, FamiliarityState> {
+    this.load()
+    return { ...this.familiarity }
+  }
+
+  // ─── Familiarity writes ────────────────────────────────────────────────────
+
+  saveFamiliarity(state: FamiliarityState): void {
+    this.load()
+    this.familiarity[state.demonId] = state
     this.persist()
   }
 

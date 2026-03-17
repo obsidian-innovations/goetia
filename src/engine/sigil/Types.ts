@@ -207,6 +207,10 @@ export type Sigil = {
   createdAt: number;
   /** Timestamp of the last status change; defaults to createdAt for existing sigils */
   statusChangedAt: number;
+  /** Number of times this sigil has been rebound (0 for new sigils) */
+  rebindCount?: number;
+  /** True if rebindCount >= 3 — weaker but immune to hex damage */
+  isAncient?: boolean;
 };
 
 export type Demon = {

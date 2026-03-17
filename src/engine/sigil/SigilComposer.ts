@@ -9,6 +9,16 @@ import type {
 } from './Types'
 import { IntentCoherenceChecker } from './IntentCoherenceChecker'
 
+// ─── Shared visual state thresholds ─────────────────────────────────────────
+
+/** Map integrity (0–1) to visual state. Used by SigilComposer and DecayEngine. */
+export function computeVisualState(integrity: number): SigilVisualState {
+  if (integrity >= 0.85) return 'charged'
+  if (integrity >= 0.60) return 'healthy'
+  if (integrity >= 0.30) return 'unstable'
+  return 'corrupted'
+}
+
 // ─── Internal state snapshot (pre-compose) ─────────────────────────────────
 
 export type SigilSnapshot = {
@@ -117,9 +127,6 @@ export class SigilComposer {
 
   private _computeVisualState(overall: number): SigilVisualState {
     if (this._bindingRing === null) return 'dormant'
-    if (overall >= 0.85) return 'charged'
-    if (overall >= 0.60) return 'healthy'
-    if (overall >= 0.30) return 'unstable'
-    return 'corrupted'
+    return computeVisualState(overall)
   }
 }
