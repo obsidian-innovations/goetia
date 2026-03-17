@@ -6,7 +6,9 @@ import type { DecayState } from '@engine/sigil/DecayEngine'
 import { processInteraction } from '@engine/familiarity/FamiliarityEngine'
 import type { FamiliarityState, FamiliarityEventType } from '@engine/familiarity/FamiliarityEngine'
 import type { DreamState } from '@engine/sigil/DreamEngine'
-import type { GrimoireMemory, FeralSigilState } from '@engine/grimoire'
+import type { GrimoireMemory, FeralSigilState, ShadowEntry } from '@engine/grimoire'
+import type { GlyphDrawingHistory } from '@engine/sigil/GlyphEvolution'
+import type { DemonOffer } from '@engine/demands/NegotiationEngine'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
@@ -17,6 +19,9 @@ interface GrimoireState {
   dreamStates: Record<string, DreamState>
   grimoireMemory: GrimoireMemory | null
   feralStates: Record<string, FeralSigilState>
+  glyphHistory: Record<string, GlyphDrawingHistory>
+  shadowEntries: ShadowEntry[]
+  activeOffers: DemonOffer[]
   isLoaded: boolean
 }
 
@@ -35,6 +40,12 @@ interface GrimoireActions {
   saveMemory: (memory: GrimoireMemory) => void
   /** Save updated feral sigil states. */
   saveFeralStates: (states: Record<string, FeralSigilState>) => void
+  /** Save updated glyph drawing history. */
+  saveGlyphHistory: (history: Record<string, GlyphDrawingHistory>) => void
+  /** Save updated shadow entries. */
+  saveShadowEntries: (entries: ShadowEntry[]) => void
+  /** Save updated active offers. */
+  saveActiveOffers: (offers: DemonOffer[]) => void
 }
 
 type GrimoireStore = GrimoireState & GrimoireActions
@@ -49,6 +60,9 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   dreamStates: {},
   grimoireMemory: null,
   feralStates: {},
+  glyphHistory: {},
+  shadowEntries: [],
+  activeOffers: [],
   isLoaded: false,
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -60,7 +74,10 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
     const dreamStates = grimoireDB.getAllDreamStates()
     const grimoireMemory = grimoireDB.getGrimoireMemory()
     const feralStates = grimoireDB.getAllFeralStates()
-    set({ pages, decayStates, familiarityStates, dreamStates, grimoireMemory, feralStates, isLoaded: true })
+    const glyphHistory = grimoireDB.getAllGlyphHistory()
+    const shadowEntries = grimoireDB.getAllShadowEntries()
+    const activeOffers = grimoireDB.getAllActiveOffers()
+    set({ pages, decayStates, familiarityStates, dreamStates, grimoireMemory, feralStates, glyphHistory, shadowEntries, activeOffers, isLoaded: true })
   },
 
   saveSigil(sigil: Sigil) {
@@ -102,5 +119,20 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   saveFeralStates(states: Record<string, FeralSigilState>) {
     grimoireDB.saveFeralStates(states)
     set({ feralStates: states })
+  },
+
+  saveGlyphHistory(history: Record<string, GlyphDrawingHistory>) {
+    grimoireDB.saveGlyphHistory(history)
+    set({ glyphHistory: history })
+  },
+
+  saveShadowEntries(entries: ShadowEntry[]) {
+    grimoireDB.saveShadowEntries(entries)
+    set({ shadowEntries: entries })
+  },
+
+  saveActiveOffers(offers: DemonOffer[]) {
+    grimoireDB.saveActiveOffers(offers)
+    set({ activeOffers: offers })
   },
 }))

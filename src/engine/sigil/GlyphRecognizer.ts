@@ -1,6 +1,8 @@
 import type { Point, GlyphId, GlyphInvariant, StrokeResult, GlyphResult, GlyphDifficulty, GlyphDifficultyConfig } from './Types'
 import { GLYPH_DIFFICULTY_CONFIGS } from './Types'
 import { GLYPH_TEMPLATES } from './GlyphLibrary'
+import type { GlyphDrawingHistory } from './GlyphEvolution'
+import { getEvolvedTemplate } from './GlyphEvolution'
 import {
   signedArea,
   doesPathSelfIntersect,
@@ -106,7 +108,7 @@ export class GlyphRecognizer {
     this._config = GLYPH_DIFFICULTY_CONFIGS[difficulty]
   }
 
-  recognize(strokes: StrokeResult[]): GlyphResult {
+  recognize(strokes: StrokeResult[], evolvedHistory?: Record<string, GlyphDrawingHistory>): GlyphResult {
     // Guard: empty or all strokes have fewer than 3 points
     if (
       strokes.length === 0 ||
@@ -150,7 +152,8 @@ export class GlyphRecognizer {
 
       // 3. Procrustes score — try both forward and reversed drawn path,
       //    keep the better score so players can draw in either direction
-      const templateNorm = normalizePathToUnitSpace(template.canonicalPath)
+      const effectivePath = getEvolvedTemplate(evolvedHistory?.[template.id], template.canonicalPath)
+      const templateNorm = normalizePathToUnitSpace(effectivePath)
       const templateResampled = resamplePath(templateNorm, this.RESAMPLE_COUNT)
       const forwardScore = procrustesScore(drawnResampled, templateResampled, this._config.rmsdMultiplier)
       const drawnReversed = [...drawnResampled].reverse()
