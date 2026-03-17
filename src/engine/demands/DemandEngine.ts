@@ -1,6 +1,7 @@
 import type { Demon } from '@engine/sigil/Types'
 import { getTemplate, getDeadlineMs } from './DemandTemplates'
 import type { DemandType } from './DemandTemplates'
+import type { FamiliarityTier } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,8 @@ export interface DemonicDemand {
   fulfilled: boolean
   /** Always true — no surveillance; the player self-reports compliance */
   selfReported: boolean
+  /** True for bonded-tier demands — cannot be refused */
+  unrefusable?: boolean
 }
 
 export type DemandOutcome = 'fulfilled' | 'ignored' | 'lied'
@@ -36,28 +39,44 @@ function nextId(): string {
 
 // ─── Core functions ────────────────────────────────────────────────────────
 
+/** Personalization prefixes by familiarity tier. */
+const TIER_PREFIXES: Partial<Record<FamiliarityTier, string>> = {
+  acquaintance: '[Personalized] ',
+  familiar: '[Offering] ',
+  bonded: '[Unrefusable] ',
+}
+
 /**
  * Generates a new demonic demand from the demon's primary domain.
  * `bindingIntegrity` influences which template tier is selected.
  * Higher integrity = harder demands (the demon senses strength to exploit).
+ * Optional `familiarityTier` personalizes the demand description and may make it unrefusable.
  */
-export function generateDemand(demon: Demon, bindingIntegrity: number): DemonicDemand {
+export function generateDemand(
+  demon: Demon,
+  bindingIntegrity: number,
+  familiarityTier?: FamiliarityTier,
+): DemonicDemand {
   const domain = demon.domains[0]
   // Escalation 0 = mildest, higher values = harder demands
   const escalation = bindingIntegrity >= 0.75 ? 2 : bindingIntegrity >= 0.5 ? 1 : 0
   const template = getTemplate(domain, escalation)
   const now = Date.now()
 
+  const prefix = familiarityTier ? (TIER_PREFIXES[familiarityTier] ?? '') : ''
+  const unrefusable = familiarityTier === 'bonded'
+
   return {
     id: nextId(),
     demonId: demon.id,
     type: template.type,
-    description: template.description,
+    description: `${prefix}${template.description}`,
     durationMs: template.baseDurationMs,
     issuedAt: now,
     deadlineMs: getDeadlineMs(demon.rank),
     fulfilled: false,
     selfReported: true,
+    unrefusable,
   }
 }
 

@@ -1,6 +1,7 @@
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { ResearchState } from '@engine/research/ResearchEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
+import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ interface GrimoireData {
   pages: GrimoirePage[]
   research: Record<string, ResearchState>
   decay?: Record<string, DecayState>
+  familiarity?: Record<string, FamiliarityState>
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -38,6 +40,7 @@ export class GrimoireDB {
   private pages: GrimoirePage[] = []
   private research: Record<string, ResearchState> = {}
   private decay: Record<string, DecayState> = {}
+  private familiarity: Record<string, FamiliarityState> = {}
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -48,6 +51,7 @@ export class GrimoireDB {
         this.pages = []
         this.research = {}
         this.decay = {}
+        this.familiarity = {}
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -56,21 +60,24 @@ export class GrimoireDB {
         this.pages = parsed
         this.research = {}
         this.decay = {}
+        this.familiarity = {}
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
         this.decay = parsed.decay ?? {}
+        this.familiarity = parsed.familiarity ?? {}
       }
     } catch {
       this.pages = []
       this.research = {}
       this.decay = {}
+      this.familiarity = {}
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -173,6 +180,7 @@ export class GrimoireDB {
     this.pages = []
     this.research = {}
     this.decay = {}
+    this.familiarity = {}
     this.persist()
   }
 
@@ -199,6 +207,32 @@ export class GrimoireDB {
   saveAllDecayStates(states: Record<string, DecayState>): void {
     this.load()
     this.decay = { ...states }
+    this.persist()
+  }
+
+  // ─── Familiarity reads ─────────────────────────────────────────────────────
+
+  getFamiliarity(demonId: string): FamiliarityState | null {
+    this.load()
+    return this.familiarity[demonId] ?? null
+  }
+
+  getAllFamiliarity(): Record<string, FamiliarityState> {
+    this.load()
+    return { ...this.familiarity }
+  }
+
+  // ─── Familiarity writes ────────────────────────────────────────────────────
+
+  saveFamiliarity(state: FamiliarityState): void {
+    this.load()
+    this.familiarity[state.demonId] = state
+    this.persist()
+  }
+
+  saveAllFamiliarity(states: Record<string, FamiliarityState>): void {
+    this.load()
+    this.familiarity = { ...states }
     this.persist()
   }
 

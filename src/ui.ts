@@ -22,6 +22,7 @@ import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
 import { DECAYABLE_STATUSES } from '@engine/sigil/DecayEngine'
 import type { DecayState } from '@engine/sigil/DecayEngine'
+import { TIER_FLAVOR } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
 
@@ -265,6 +266,13 @@ const STYLE = `
   }
   .sigil-entry.ancient { border-color: #336633; }
   .sigil-entry.ancient .s-strata-mark { background: #44aa44; opacity: 0.8; }
+  .grimoire-section .s-familiarity {
+    font-size: 0.65rem; color: #8866aa; font-style: italic;
+    margin-top: 2px; letter-spacing: 0.04em;
+  }
+  .grimoire-section .s-familiarity.tier-bonded { color: #cc9900; }
+  .grimoire-section .s-familiarity.tier-familiar { color: #66aa88; }
+  .grimoire-section .s-familiarity.tier-acquaintance { color: #7788aa; }
   #grimoire-empty { text-align: center; color: #443355; font-size: 0.85rem; margin-top: 3rem; }
 
   /* ── Charging ── */
@@ -2460,6 +2468,7 @@ export class UIManager {
     useGrimoireStore.getState().load()
     const pages = useGrimoireStore.getState().pages
     const decayStates = useGrimoireStore.getState().decayStates
+    const familiarityStates = useGrimoireStore.getState().familiarityStates
     const research = useResearchStore.getState().researching
     const demonMap = new Map(listDemons().map(d => [d.id, d]))
     const content = this._root.querySelector<HTMLElement>('#grimoire-content')
@@ -2481,6 +2490,15 @@ export class UIManager {
       const h3 = el('h3')
       h3.textContent = demon?.name ?? page.demonId
       section.appendChild(h3)
+
+      // Familiarity flavor text
+      const famState = familiarityStates[page.demonId]
+      if (famState && famState.tier !== 'stranger') {
+        const famEl = el('div', 's-familiarity')
+        famEl.textContent = TIER_FLAVOR[famState.tier]
+        famEl.classList.add(`tier-${famState.tier}`)
+        section.appendChild(famEl)
+      }
 
       // Research progress bar (if not fully known)
       if (rs && rs.progress < 1) {

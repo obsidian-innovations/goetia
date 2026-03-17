@@ -3,12 +3,14 @@ import { grimoireDB } from '@db/grimoire'
 import type { GrimoirePage } from '@db/grimoire'
 import type { Sigil, SigilStatus } from '@engine/sigil/Types'
 import type { DecayState } from '@engine/sigil/DecayEngine'
+import type { FamiliarityState } from '@engine/familiarity/FamiliarityEngine'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
 interface GrimoireState {
   pages: GrimoirePage[]
   decayStates: Record<string, DecayState>
+  familiarityStates: Record<string, FamiliarityState>
   isLoaded: boolean
 }
 
@@ -19,6 +21,8 @@ interface GrimoireActions {
   getPageForDemon: (demonId: string) => GrimoirePage | undefined
   /** Batch-update decayed sigils and their decay states. */
   applyDecayBatch: (updatedSigils: Sigil[], updatedDecayStates: Record<string, DecayState>) => void
+  /** Update familiarity for a demon. */
+  updateFamiliarity: (states: Record<string, FamiliarityState>) => void
 }
 
 type GrimoireStore = GrimoireState & GrimoireActions
@@ -29,6 +33,7 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   // ── Initial state ──────────────────────────────────────────────────────
   pages: [],
   decayStates: {},
+  familiarityStates: {},
   isLoaded: false,
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -36,7 +41,8 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
   load() {
     const pages = grimoireDB.getAll()
     const decayStates = grimoireDB.getAllDecayStates()
-    set({ pages, decayStates, isLoaded: true })
+    const familiarityStates = grimoireDB.getAllFamiliarity()
+    set({ pages, decayStates, familiarityStates, isLoaded: true })
   },
 
   saveSigil(sigil: Sigil) {
@@ -57,5 +63,10 @@ export const useGrimoireStore = createStore<GrimoireStore>((set, get) => ({
     // Single load/persist cycle for both sigils and decay states
     const pages = grimoireDB.saveDecayBatch(updatedSigils, updatedDecayStates)
     set({ pages, decayStates: updatedDecayStates })
+  },
+
+  updateFamiliarity(states: Record<string, FamiliarityState>) {
+    grimoireDB.saveAllFamiliarity(states)
+    set({ familiarityStates: states })
   },
 }))
