@@ -17,6 +17,39 @@ import {
   exposeSigil,
   type CovenState,
 } from '@engine/social/CovenEngine'
+import {
+  createGlobalMemory,
+  recordHexUse,
+  recordBinding,
+  recordPurification,
+  getDemonPersonality,
+  type GlobalDemonMemory,
+  type DemonPersonality,
+} from '@engine/social/Anamnesis'
+import {
+  createCollectiveRitual,
+  addContribution,
+  isRitualComplete,
+  completeRitual,
+  betrayRitual,
+  type CollectiveRitualState,
+  type RitualContribution,
+} from '@engine/social/CollectiveRitual'
+import {
+  createHierarchy,
+  initFromCoven,
+  recordContribution,
+  recordParticipation,
+  tickHierarchy as tickHierarchyFn,
+  type HierarchyState,
+} from '@engine/social/InnerCircle'
+import {
+  createObservationState,
+  observeClash,
+  recordObservation,
+  clearObservations,
+  type SpectralObservationState,
+} from '@engine/social/SpectralObservation'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
@@ -33,6 +66,14 @@ interface PvPStoreState {
   covenState: CovenState | null
   /** Local player ID (null until authenticated) */
   playerId: string | null
+  /** Aggregated demon treatment history (Anamnesis) */
+  globalMemory: GlobalDemonMemory
+  /** Active collective ritual, or null */
+  collectiveRitual: CollectiveRitualState | null
+  /** Inner circle hierarchy weights */
+  hierarchy: HierarchyState
+  /** Spectral observation state */
+  observationState: SpectralObservationState
 }
 
 interface PvPStoreActions {
@@ -62,6 +103,28 @@ interface PvPStoreActions {
   exposeSigilToCoven: (sigilId: string, targetPlayerId: string) => void
   /** Tick: expire old hexes, wards, and incoming hexes */
   tick: (now: number) => void
+
+  // ── Anamnesis ──────────────────────────────────────────────────────────
+  recordDemonHexUse: (demonId: string) => void
+  recordDemonBinding: (demonId: string) => void
+  recordDemonPurification: (demonId: string) => void
+  getDemonPersonalityModifiers: (demonId: string) => DemonPersonality
+
+  // ── CollectiveRitual ───────────────────────────────────────────────────
+  startCollectiveRitual: (demonId: string, now: number) => void
+  contributeToRitual: (contribution: RitualContribution) => void
+  completeCollectiveRitual: (now: number) => void
+  betrayCollectiveRitual: (betrayerId: string, now: number) => void
+
+  // ── InnerCircle ────────────────────────────────────────────────────────
+  initHierarchy: () => void
+  recordMemberContribution: (playerId: string, quality: number) => void
+  recordMemberParticipation: (playerId: string) => void
+  tickHierarchy: () => void
+
+  // ── SpectralObservation ────────────────────────────────────────────────
+  processObservedClash: (clashResult: ClashResult, inRange: boolean) => void
+  clearObservedClashes: () => void
 }
 
 type PvPStore = PvPStoreState & PvPStoreActions
@@ -75,6 +138,10 @@ export const usePvPStore = createStore<PvPStore>((set, get) => ({
   lastClashResult: null,
   covenState:      null,
   playerId:        null,
+  globalMemory:    createGlobalMemory(),
+  collectiveRitual: null,
+  hierarchy:       createHierarchy(),
+  observationState: createObservationState(),
 
   setPlayerId(id: string) {
     set({ playerId: id })
@@ -126,17 +193,28 @@ export const usePvPStore = createStore<PvPStore>((set, get) => ({
   createCoven(name: string) {
     const { playerId } = get()
     if (!playerId) return
-    set({ covenState: createCoven(name, playerId, Date.now()) })
+    const covenState = createCoven(name, playerId, Date.now())
+    set({
+      covenState,
+      hierarchy: initFromCoven(covenState),
+    })
   },
 
   setCoven(covenState: CovenState) {
-    set({ covenState })
+    set({
+      covenState,
+      hierarchy: initFromCoven(covenState),
+    })
   },
 
   inviteToCoven(playerId: string) {
     const { covenState } = get()
     if (!covenState) return
-    set({ covenState: inviteMember(covenState, playerId) })
+    const updated = inviteMember(covenState, playerId)
+    set({
+      covenState: updated,
+      hierarchy: initFromCoven(updated),
+    })
   },
 
   contributeToCovenGrimoire(sigil: Sigil) {
@@ -163,5 +241,89 @@ export const usePvPStore = createStore<PvPStore>((set, get) => ({
       activeWards:   state.activeWards.filter(w => isHexActive(w, now)),
       incomingHexes: state.incomingHexes.filter(h => isHexActive(h, now)),
     }))
+  },
+
+  // ── Anamnesis ────────────────────────────────────────────────────────────
+
+  recordDemonHexUse(demonId: string) {
+    set(state => ({ globalMemory: recordHexUse(state.globalMemory, demonId) }))
+  },
+
+  recordDemonBinding(demonId: string) {
+    set(state => ({ globalMemory: recordBinding(state.globalMemory, demonId) }))
+  },
+
+  recordDemonPurification(demonId: string) {
+    set(state => ({ globalMemory: recordPurification(state.globalMemory, demonId) }))
+  },
+
+  getDemonPersonalityModifiers(demonId: string): DemonPersonality {
+    return getDemonPersonality(get().globalMemory, demonId)
+  },
+
+  // ── CollectiveRitual ─────────────────────────────────────────────────────
+
+  startCollectiveRitual(demonId: string, now: number) {
+    const { covenState } = get()
+    if (!covenState) return
+    set({ collectiveRitual: createCollectiveRitual(covenState.coven.name, demonId, now) })
+  },
+
+  contributeToRitual(contribution: RitualContribution) {
+    set(state => {
+      if (!state.collectiveRitual) return {}
+      return { collectiveRitual: addContribution(state.collectiveRitual, contribution) }
+    })
+  },
+
+  completeCollectiveRitual(now: number) {
+    set(state => {
+      if (!state.collectiveRitual) return {}
+      if (!isRitualComplete(state.collectiveRitual)) return {}
+      return { collectiveRitual: completeRitual(state.collectiveRitual, now) }
+    })
+  },
+
+  betrayCollectiveRitual(betrayerId: string, now: number) {
+    set(state => {
+      if (!state.collectiveRitual || !state.covenState) return {}
+      const { ritualState, covenState: updatedCoven } = betrayRitual(
+        state.collectiveRitual, betrayerId, state.covenState, now,
+      )
+      return { collectiveRitual: ritualState, covenState: updatedCoven }
+    })
+  },
+
+  // ── InnerCircle ──────────────────────────────────────────────────────────
+
+  initHierarchy() {
+    const { covenState } = get()
+    if (!covenState) return
+    set({ hierarchy: initFromCoven(covenState) })
+  },
+
+  recordMemberContribution(playerId: string, quality: number) {
+    set(state => ({ hierarchy: recordContribution(state.hierarchy, playerId, quality) }))
+  },
+
+  recordMemberParticipation(playerId: string) {
+    set(state => ({ hierarchy: recordParticipation(state.hierarchy, playerId) }))
+  },
+
+  tickHierarchy() {
+    set(state => ({ hierarchy: tickHierarchyFn(state.hierarchy) }))
+  },
+
+  // ── SpectralObservation ──────────────────────────────────────────────────
+
+  processObservedClash(clashResult: ClashResult, inRange: boolean) {
+    set(state => {
+      const obs = observeClash(clashResult, inRange)
+      return { observationState: recordObservation(state.observationState, obs) }
+    })
+  },
+
+  clearObservedClashes() {
+    set(state => ({ observationState: clearObservations(state.observationState) }))
   },
 }))
