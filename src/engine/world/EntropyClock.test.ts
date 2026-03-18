@@ -105,6 +105,5 @@ describe('isThresholdTriggered', () => {
     const state = createEntropyState()
     expect(isThresholdTriggered(state, 'new_encounters')).toBe(false)
     expect(isThresholdTriggered(state, 'auto_king_events')).toBe(false)
-    expect(isThresholdTriggered(state, 'nonexistent_label')).toBe(false)
   })
 })

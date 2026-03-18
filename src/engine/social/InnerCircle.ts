@@ -116,26 +116,28 @@ export function applyBetrayalPenalty(
 
 // ─── Queries ───────────────────────────────────────────────────────────────
 
+function getMaxInfluence(state: HierarchyState): number {
+  let max = 0
+  for (const w of state.weights.values()) {
+    if (w.influence > max) max = w.influence
+  }
+  return max
+}
+
 /** Get the normalized weight for a member (0–1 relative to highest in coven). */
 export function getNormalizedWeight(state: HierarchyState, playerId: string): number {
   const member = state.weights.get(playerId)
   if (!member) return 0
-  let maxInfluence = 0
-  for (const w of state.weights.values()) {
-    if (w.influence > maxInfluence) maxInfluence = w.influence
-  }
-  return maxInfluence > 0 ? member.influence / maxInfluence : 0
+  const max = getMaxInfluence(state)
+  return max > 0 ? member.influence / max : 0
 }
 
 /** Get all member weights as a Map<playerId, normalizedWeight> for use in ritual weighting. */
 export function getMemberWeights(state: HierarchyState): Map<string, number> {
-  let maxInfluence = 0
-  for (const w of state.weights.values()) {
-    if (w.influence > maxInfluence) maxInfluence = w.influence
-  }
+  const max = getMaxInfluence(state)
   const result = new Map<string, number>()
   for (const [id, w] of state.weights) {
-    result.set(id, maxInfluence > 0 ? w.influence / maxInfluence : 1.0)
+    result.set(id, max > 0 ? w.influence / max : 1.0)
   }
   return result
 }

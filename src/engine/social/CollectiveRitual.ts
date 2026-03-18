@@ -1,4 +1,5 @@
 import type { Sigil } from '@engine/sigil/Types'
+import { computeVisualState } from '@engine/sigil/SigilComposer'
 import type { CovenState } from './CovenEngine'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -131,7 +132,7 @@ export function completeRitual(
     intentCoherence: { score: 1, contradictions: [], incompleteChains: [], isolatedGlyphs: [] },
     bindingRing: null,
     overallIntegrity: integrity,
-    visualState: integrity >= 0.60 ? 'healthy' : integrity >= 0.30 ? 'unstable' : 'corrupted',
+    visualState: computeVisualState(integrity),
     status: 'complete',
     createdAt: now,
     statusChangedAt: now,

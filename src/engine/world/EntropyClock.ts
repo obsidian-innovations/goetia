@@ -2,11 +2,18 @@
 
 export type EntropyEventType = 'sigil_created' | 'sigil_corrupted' | 'sigil_spent' | 'sigil_destroyed'
 
+export type EntropyThresholdLabel =
+  | 'new_encounters'
+  | 'thin_place_mutation'
+  | 'glyph_difficulty_increase'
+  | 'auto_king_events'
+  | 'weight_shift'
+
 export interface EntropyThreshold {
   /** Counter value that triggers this threshold */
   value: number
   /** Description of what happens at this threshold */
-  label: string
+  label: EntropyThresholdLabel
   /** Whether this threshold has been triggered */
   triggered: boolean
 }
@@ -133,6 +140,6 @@ export function getNewlyTriggered(
 /**
  * Check if a specific threshold has been triggered.
  */
-export function isThresholdTriggered(state: EntropyState, label: string): boolean {
+export function isThresholdTriggered(state: EntropyState, label: EntropyThresholdLabel): boolean {
   return state.thresholds.some(t => t.label === label && t.triggered)
 }

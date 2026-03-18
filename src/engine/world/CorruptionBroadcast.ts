@@ -1,3 +1,4 @@
+import { haversineDistance } from './ThinPlaces'
 import type { ThinPlace, Coord } from './ThinPlaces'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -50,6 +51,9 @@ const VESSEL_THRESHOLD = 0.80
 /** Whisper interval reduction factor at vessel stage. */
 const VESSEL_WHISPER_FACTOR = 0.5
 
+/** Whisper interval reduction factor at broadcast (non-vessel) stage. */
+const BROADCAST_WHISPER_FACTOR = 0.75
+
 // ─── Factory ───────────────────────────────────────────────────────────────
 
 export function createBroadcastState(corruptionLevel: number, now: number): BroadcastState {
@@ -100,7 +104,7 @@ export function broadcastCorruption(
   const effects: BroadcastEffect[] = []
   const updatedPlaces = nearbyPlaces.map(tp => {
     // Only affect places within broadcast radius
-    const dist = simpleDist(playerPosition, tp.center)
+    const dist = haversineDistance(playerPosition, tp.center)
     if (dist > BROADCAST_RADIUS_M) return tp
 
     const newVeil = Math.max(0.05, tp.veilStrength - reduction)
@@ -144,7 +148,7 @@ export function isTemporaryPlaceExpired(place: TemporaryThinPlace, now: number):
  */
 export function getWhisperIntervalMultiplier(state: BroadcastState): number {
   if (isVesselBroadcasting(state)) return VESSEL_WHISPER_FACTOR
-  if (isBroadcasting(state)) return 0.75
+  if (isBroadcasting(state)) return BROADCAST_WHISPER_FACTOR
   return 1.0
 }
 
@@ -162,12 +166,3 @@ export function updateBroadcast(
   }
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
-
-/** Simple Euclidean approximation for short distances (used for broadcast radius). */
-function simpleDist(a: Coord, b: Coord): number {
-  // Approximate metres from lat/lng diff (good enough for <1km)
-  const latDiff = (b.lat - a.lat) * 111_320
-  const lngDiff = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180)
-  return Math.sqrt(latDiff * latDiff + lngDiff * lngDiff)
-}
