@@ -42,6 +42,7 @@ import type { RitualConditions } from '@engine/ritual/ConditionsEngine'
 import { analyzeFrame, getScryingTrigger } from '@engine/scrying/ScryingEngine'
 import { startMicrophone, stopMicrophone, analyzeAudioLevel, isMicrophoneActive } from './services/microphone'
 import { startCamera as startCameraService, stopCamera as stopCameraService, captureFrame } from './services/camera'
+import { isBroadcasting } from '@engine/world/CorruptionBroadcast'
 
 const lifecycleManager = new SigilLifecycleManager()
 
@@ -234,6 +235,9 @@ async function init(): Promise<void> {
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
 
+      // Record entropy event for sigil creation
+      useWorldStore.getState().recordEntropy('sigil_created')
+
       // Award research XP and record world ritual activity
       const demonId = useCanvasStore.getState().currentDemonId
 
@@ -251,10 +255,19 @@ async function init(): Promise<void> {
         useResearchStore.getState().addProgress(demonId, xp)
         ui.refreshDemonGrid()
 
+        // Record demon binding in anamnesis
+        usePvPStore.getState().recordDemonBinding(demonId)
+
         // Record ritual in the world engine (for thin place spawning)
         const playerPos = useWorldStore.getState().playerPosition
         if (playerPos) {
           useWorldStore.getState().recordRitual(playerPos, completedSigil.overallIntegrity, demonId)
+        }
+
+        // Embed echo at current thin place
+        const currentTP = useWorldStore.getState().currentThinPlace
+        if (currentTP) {
+          useWorldStore.getState().embedEcho(currentTP.id, `Sigil of ${demonId}`, demonId, 'local', Date.now())
         }
       }
 
@@ -337,6 +350,7 @@ async function init(): Promise<void> {
       const hex = usePvPStore.getState().castHex(targetLabel, found.sigil, found.demon)
       networkService.sendHex(targetLabel, hex)
       useGrimoireStore.getState().recordFamiliarity(found.demon.id, 'hex_cast')
+      usePvPStore.getState().recordDemonHexUse(found.demon.id)
       haptic('sigilSettle')
       audioManager.play('sigilSettle')
     },
@@ -383,6 +397,15 @@ async function init(): Promise<void> {
       }
     },
 
+    onJoinKingEvent() {
+      const playerId = usePvPStore.getState().playerId ?? 'local'
+      useWorldStore.getState().joinKingEvent(playerId)
+    },
+
+    onStartCollectiveRitual(demonId: string) {
+      usePvPStore.getState().startCollectiveRitual(demonId, Date.now())
+    },
+
     onAttemptPurification() {
       const vessel = useCorruptionStore.getState().vessel
       if (!vessel) return
@@ -402,6 +425,9 @@ async function init(): Promise<void> {
         useCorruptionStore.getState().setVessel(null)
         // Persist permanent scars for vessel perspective (post-purification flicker etc.)
         permanentScars = result.permanentScars
+        // Record purification in anamnesis
+        const purifiedDemonId = useCanvasStore.getState().currentDemonId
+        if (purifiedDemonId) usePvPStore.getState().recordDemonPurification(purifiedDemonId)
         haptic('sigilSettle')
         audioManager.play('sigilSettle')
       } else {
@@ -439,6 +465,12 @@ async function init(): Promise<void> {
     const { nearbyThinPlaces, currentThinPlace, playerPosition, locationPermission } = worldState
     ui.updateWorldState(nearbyThinPlaces, currentThinPlace, playerPosition, locationPermission)
 
+    // Phase 7J: world module UI updates
+    ui.updateEntropy(worldState.entropyState.counter, worldState.entropyEffects)
+    ui.updateKingEvent(worldState.activeKingEvent)
+    ui.updateBroadcast(worldState.broadcastState !== null && isBroadcasting(worldState.broadcastState))
+    ui.updatePilgrimages(worldState.pilgrimageState)
+
     // Roll for an encounter when entering a new thin place
     // Update _prevThinPlaceId BEFORE rollEncounter to prevent re-entrant subscribe loop
     const enteredNewPlace = currentThinPlace && currentThinPlace.id !== _prevThinPlaceId
@@ -464,6 +496,11 @@ async function init(): Promise<void> {
   usePvPStore.subscribe((pvpState) => {
     ui.updatePvP(pvpState.activeHexes, pvpState.activeWards)
     ui.updateCoven(pvpState.covenState)
+
+    // Phase 7J: social module UI updates
+    ui.updateCollectiveRitual(pvpState.collectiveRitual)
+    ui.updateHierarchy(pvpState.hierarchy)
+    ui.updateObservations(pvpState.observationState)
     if (pvpState.lastClashResult) {
       ui.updateClashResult(pvpState.lastClashResult, 'Attacker', 'Defender', 0, 0)
 
@@ -551,6 +588,9 @@ async function init(): Promise<void> {
   networkService.setCallbacks({
     onClashResult(result, _challengeId) {
       usePvPStore.getState().setLastClashResult(result)
+      // Record spectral observation if player is in a thin place
+      const inRange = useWorldStore.getState().currentThinPlace !== null
+      usePvPStore.getState().processObservedClash(result, inRange)
       ui.showClash()
     },
     onIncomingHex(hex) {
@@ -621,6 +661,15 @@ async function init(): Promise<void> {
     useChargingStore.getState().tickAll(now, chargeMultiplier)
     // Tick world decay as well
     useWorldStore.getState().tick(now)
+
+    // Tick corruption broadcast (every second, affects nearby thin places)
+    {
+      const corruptionLevel = useCorruptionStore.getState().corruption.level
+      const playerPos = useWorldStore.getState().playerPosition
+      if (playerPos) {
+        useWorldStore.getState().tickBroadcast(corruptionLevel, playerPos, now)
+      }
+    }
 
     // Tick PvP (expire old hexes/wards)
     usePvPStore.getState().tick(now)
@@ -838,6 +887,16 @@ async function init(): Promise<void> {
         if (feralResult.feralCount > 0 && Math.random() < 0.1) {
           ui.showWhisper(generateFeralWhisper(), 'medium')
         }
+      }
+
+      // ── Pilgrimage, King Event, and Inner Circle ticks ──────────────────
+      {
+        const worldState = useWorldStore.getState()
+        if (worldState.playerPosition) {
+          worldState.tickPilgrimages(worldState.playerPosition, now)
+        }
+        worldState.tickKingEvent(now)
+        usePvPStore.getState().tickHierarchy()
       }
     }
 

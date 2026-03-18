@@ -20,6 +20,48 @@ import {
   type Encounter,
 } from '@engine/world/Encounters'
 import { FIXED_THIN_PLACES } from '@engine/world/FixedThinPlaces'
+import {
+  createBroadcastState,
+  updateBroadcast,
+  broadcastCorruption,
+  isVesselBroadcasting,
+  createVesselThinPlace,
+  isTemporaryPlaceExpired,
+  type BroadcastState,
+  type TemporaryThinPlace,
+} from '@engine/world/CorruptionBroadcast'
+import {
+  createWhisperingWall,
+  embedEcho as embedEchoFn,
+  getResonanceModifier,
+  type WhisperingWallState,
+} from '@engine/world/Echoes'
+import {
+  createEntropyState,
+  recordEntropyEvent,
+  getEntropyEffects,
+  type EntropyState,
+  type EntropyEffects,
+  type EntropyEventType,
+} from '@engine/world/EntropyClock'
+import {
+  createPilgrimageState,
+  startPilgrimage as startPilgrimageFn,
+  updatePilgrimage as updatePilgrimageFn,
+  getDemonDirection,
+  type PilgrimageState,
+} from '@engine/world/Pilgrimages'
+import {
+  createKingEvent,
+  joinKingEvent as joinKingEventFn,
+  updateParticipantProgress,
+  isKingEventComplete,
+  collapseKingEvent,
+  isCollapseActive,
+  resolveKingEvent,
+  type KingEvent,
+} from '@engine/world/KingEvent'
+import type { Demon } from '@engine/sigil/Types'
 
 // ─── Store shape ───────────────────────────────────────────────────────────
 
@@ -34,6 +76,20 @@ interface WorldStoreState {
   generatorState: GeneratorState
   /** Active PvE encounters (cleared when bound or expired) */
   activeEncounters: Encounter[]
+  /** Corruption broadcast state (null until initialized) */
+  broadcastState: BroadcastState | null
+  /** Echoes left at thin places by previous rituals */
+  echoState: WhisperingWallState
+  /** World-level entropy accumulation */
+  entropyState: EntropyState
+  /** Cached entropy effects (recomputed on entropy change) */
+  entropyEffects: EntropyEffects
+  /** Active pilgrimages keyed by demon ID */
+  pilgrimageState: PilgrimageState
+  /** Active king demon world event, or null */
+  activeKingEvent: KingEvent | null
+  /** Temporary thin places created by vessel-stage players */
+  temporaryThinPlaces: TemporaryThinPlace[]
 }
 
 interface WorldStoreActions {
@@ -51,6 +107,27 @@ interface WorldStoreActions {
   tick: (now: number) => void
   /** Returns the charge multiplier at the player's current position */
   getChargeMultiplier: () => number
+
+  // ── CorruptionBroadcast ────────────────────────────────────────────────
+  initBroadcast: (corruptionLevel: number, now: number) => void
+  tickBroadcast: (corruptionLevel: number, playerPos: Coord, now: number) => void
+
+  // ── Echoes ─────────────────────────────────────────────────────────────
+  embedEcho: (thinPlaceId: string, text: string, demonId: string, playerId: string, now: number) => void
+  getEchoResonance: (thinPlaceId: string) => number
+
+  // ── EntropyClock ───────────────────────────────────────────────────────
+  recordEntropy: (eventType: EntropyEventType) => void
+
+  // ── Pilgrimages ────────────────────────────────────────────────────────
+  startPilgrimage: (demonId: string, demonIndex: number, currentPos: Coord) => void
+  tickPilgrimages: (playerPos: Coord, now: number) => void
+
+  // ── KingEvent ──────────────────────────────────────────────────────────
+  startKingEvent: (demon: Demon, initiatorId: string, now: number) => void
+  joinKingEvent: (playerId: string) => void
+  updateKingProgress: (playerId: string, progress: number) => void
+  tickKingEvent: (now: number) => void
 }
 
 type WorldStore = WorldStoreState & WorldStoreActions
@@ -68,6 +145,13 @@ export const useWorldStore = createStore<WorldStore>((set, get) => ({
   locationPermission: 'prompt',
   generatorState: createGeneratorState(),
   activeEncounters: [],
+  broadcastState: null,
+  echoState: createWhisperingWall(),
+  entropyState: createEntropyState(),
+  entropyEffects: getEntropyEffects(createEntropyState()),
+  pilgrimageState: createPilgrimageState(),
+  activeKingEvent: null,
+  temporaryThinPlaces: [],
 
   updatePosition(coord: Coord) {
     const { generatorState } = get()
@@ -140,4 +224,147 @@ export const useWorldStore = createStore<WorldStore>((set, get) => ({
     if (!currentThinPlace) return 1.0
     return 1.5 + (1 - currentThinPlace.veilStrength) * 1.5
   },
+
+  // ── CorruptionBroadcast ──────────────────────────────────────────────────
+
+  initBroadcast(corruptionLevel: number, now: number) {
+    set({ broadcastState: createBroadcastState(corruptionLevel, now) })
+  },
+
+  tickBroadcast(corruptionLevel: number, playerPos: Coord, now: number) {
+    const state = get()
+    if (!state.broadcastState) {
+      // Auto-initialize on first tick
+      set({ broadcastState: createBroadcastState(corruptionLevel, now) })
+      return
+    }
+
+    const updated = updateBroadcast(state.broadcastState, corruptionLevel, playerPos, now)
+
+    // Broadcast corruption to nearby thin places
+    const { effects, updatedPlaces } = broadcastCorruption(
+      updated, state.nearbyThinPlaces, playerPos, now,
+    )
+
+    // Expire temporary thin places and create new ones for vessel players
+    let tempPlaces = state.temporaryThinPlaces.filter(p => !isTemporaryPlaceExpired(p, now))
+    if (isVesselBroadcasting(updated)) {
+      const vesselPlace = createVesselThinPlace(updated, playerPos, now)
+      if (vesselPlace) tempPlaces = [...tempPlaces, vesselPlace]
+    }
+
+    const updates: Partial<WorldStoreState> = {
+      broadcastState: updated,
+      temporaryThinPlaces: tempPlaces,
+    }
+
+    // Only update nearby places if broadcast actually changed them
+    if (effects.length > 0) {
+      updates.nearbyThinPlaces = updatedPlaces
+    }
+
+    set(updates)
+  },
+
+  // ── Echoes ───────────────────────────────────────────────────────────────
+
+  embedEcho(thinPlaceId: string, text: string, demonId: string, playerId: string, now: number) {
+    set(state => ({
+      echoState: embedEchoFn(state.echoState, thinPlaceId, text, demonId, playerId, now),
+    }))
+  },
+
+  getEchoResonance(thinPlaceId: string): number {
+    return getResonanceModifier(get().echoState, thinPlaceId)
+  },
+
+  // ── EntropyClock ─────────────────────────────────────────────────────────
+
+  recordEntropy(eventType: EntropyEventType) {
+    set(state => {
+      const newEntropyState = recordEntropyEvent(state.entropyState, eventType)
+      return {
+        entropyState: newEntropyState,
+        entropyEffects: getEntropyEffects(newEntropyState),
+      }
+    })
+  },
+
+  // ── Pilgrimages ──────────────────────────────────────────────────────────
+
+  startPilgrimage(demonId: string, demonIndex: number, currentPos: Coord) {
+    set(state => ({
+      pilgrimageState: startPilgrimageFn(state.pilgrimageState, demonId, currentPos),
+    }))
+    // demonIndex used for direction calculation at update time
+    void demonIndex
+  },
+
+  tickPilgrimages(playerPos: Coord, now: number) {
+    set(state => {
+      let pilgrimageState = state.pilgrimageState
+      for (const [demonId, progress] of pilgrimageState.pilgrimages) {
+        if (progress.completed) continue
+        // Derive direction from demon index (use hash of demonId as fallback)
+        const demonIndex = demonIdToIndex(demonId)
+        const direction = getDemonDirection(demonIndex)
+        pilgrimageState = updatePilgrimageFn(pilgrimageState, demonId, direction, playerPos, now)
+      }
+      return { pilgrimageState }
+    })
+  },
+
+  // ── KingEvent ────────────────────────────────────────────────────────────
+
+  startKingEvent(demon: Demon, initiatorId: string, now: number) {
+    set({ activeKingEvent: createKingEvent(demon, initiatorId, now) })
+  },
+
+  joinKingEvent(playerId: string) {
+    const { activeKingEvent } = get()
+    if (!activeKingEvent) return
+    const { event } = joinKingEventFn(activeKingEvent, playerId)
+    set({ activeKingEvent: event })
+  },
+
+  updateKingProgress(playerId: string, progress: number) {
+    const { activeKingEvent } = get()
+    if (!activeKingEvent) return
+    const updated = updateParticipantProgress(activeKingEvent, playerId, progress)
+    if (isKingEventComplete(updated)) {
+      set({ activeKingEvent: resolveKingEvent(updated) })
+    } else {
+      set({ activeKingEvent: updated })
+    }
+  },
+
+  tickKingEvent(now: number) {
+    const { activeKingEvent } = get()
+    if (!activeKingEvent) return
+    if (activeKingEvent.phase === 'resolved') {
+      set({ activeKingEvent: null })
+      return
+    }
+    // Check for disconnected participants and collapse if needed
+    const hasDisconnected = activeKingEvent.participants.some(p => !p.connected)
+    if (hasDisconnected && activeKingEvent.phase === 'active') {
+      set({ activeKingEvent: collapseKingEvent(activeKingEvent, now) })
+      return
+    }
+    // Expire collapsed events
+    if (activeKingEvent.phase === 'collapsed' && !isCollapseActive(activeKingEvent, now)) {
+      set({ activeKingEvent: null })
+    }
+  },
 }))
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+/** Derive a stable index (1–72) from a demon ID string. */
+function demonIdToIndex(demonId: string): number {
+  let hash = 0
+  for (let i = 0; i < demonId.length; i++) {
+    hash = (hash * 31 + demonId.charCodeAt(i)) | 0
+  }
+  return (Math.abs(hash) % 72) + 1
+}

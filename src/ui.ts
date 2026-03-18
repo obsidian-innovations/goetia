@@ -18,6 +18,14 @@ import { bearingDeg, compassLabel } from '@engine/world/ThinPlaces'
 import type { ClashResult } from '@engine/pvp/ClashResolver'
 import type { Hex } from '@engine/pvp/HexSystem'
 import type { CovenState } from '@engine/social/CovenEngine'
+import type { EntropyEffects } from '@engine/world/EntropyClock'
+import type { KingEvent } from '@engine/world/KingEvent'
+import type { PilgrimageState } from '@engine/world/Pilgrimages'
+import type { CollectiveRitualState } from '@engine/social/CollectiveRitual'
+import type { HierarchyState } from '@engine/social/InnerCircle'
+import { getRanking, getNormalizedWeight } from '@engine/social/InnerCircle'
+import type { SpectralObservationState } from '@engine/social/SpectralObservation'
+import type { DemonPersonality } from '@engine/social/Anamnesis'
 import { startCamera, stopCamera } from '@services/camera'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
@@ -54,6 +62,8 @@ export interface UICallbacks {
   onEnterCameraMode?: () => void
   onExitCameraMode?: () => void
   onToggleMicrophone?: () => void
+  onJoinKingEvent?: () => void
+  onStartCollectiveRitual?: (demonId: string) => void
 }
 
 // ─── Visual-state colour map ──────────────────────────────────────────────────
@@ -770,6 +780,23 @@ const STYLE = `
     100% { opacity: 1; }
   }
   .s-post-purification-flicker { animation: purification-flicker 3s infinite; }
+
+  /* ── Phase 7J: World & Social UI additions ─────────────────────────────── */
+  #entropy-counter { display:flex; gap:0.5rem; align-items:center; font-size:0.75rem; color:#aa88cc; margin-left:auto; }
+  #entropy-value { font-weight:bold; color:#ddaaff; }
+  #king-event-banner { display:none; padding:0.5rem 1rem; background:rgba(100,0,0,0.6); border:1px solid #cc4400; text-align:center; gap:1rem; align-items:center; justify-content:center; }
+  #king-event-banner.visible { display:flex; }
+  #join-king-event-btn { background:#cc4400; border:none; color:#fff; padding:0.25rem 0.75rem; cursor:pointer; font-family:inherit; font-size:0.75rem; border-radius:3px; }
+  #broadcast-indicator { display:none; position:fixed; bottom:8px; left:50%; transform:translateX(-50%); font-size:0.7rem; color:#ff4444; z-index:99; }
+  #broadcast-indicator.visible { display:block; }
+  #pilgrimages-section h3, #collective-ritual-section h3, #inner-circle-section h3, #observation-log h3, #demon-personality-section h3 { font-size:0.8rem; color:#aa88cc; margin:0.5rem 0 0.25rem; text-transform:uppercase; letter-spacing:0.08em; }
+  .pilgrimage-entry, .hierarchy-entry, .observation-entry { display:flex; justify-content:space-between; padding:0.25rem 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.8rem; color:#ccc; }
+  #collective-ritual-section { margin-top:1rem; padding:0.5rem; border:1px solid rgba(170,85,255,0.2); border-radius:4px; }
+  #start-collective-ritual-btn { background:#553388; border:none; color:#fff; padding:0.5rem; cursor:pointer; width:100%; margin-top:0.5rem; font-family:inherit; font-size:0.75rem; border-radius:3px; text-transform:uppercase; letter-spacing:0.08em; }
+  #inner-circle-section { margin-top:0.75rem; }
+  #observation-log { margin-top:0.75rem; }
+  #demon-personality-section { margin-top:1rem; padding:0.5rem; border:1px solid rgba(255,136,0,0.2); border-radius:4px; }
+  .anomalous { color:#ff8800; font-style:italic; }
 `
 
 // ─── UIManager ────────────────────────────────────────────────────────────────
@@ -1285,6 +1312,96 @@ export class UIManager {
       this._moonIndicator.classList.toggle('witching', modifiers.isWitchingHour)
       this._lastWitching = modifiers.isWitchingHour
     }
+  }
+
+  // ── Phase 7J update methods ─────────────────────────────────────────────
+
+  /** Update the entropy counter display. */
+  updateEntropy(counter: number, _effects: EntropyEffects): void {
+    const el = this._root.querySelector('#entropy-value')
+    if (el) el.textContent = String(counter)
+  }
+
+  /** Update the king event banner. */
+  updateKingEvent(event: KingEvent | null): void {
+    const banner = this._root.querySelector('#king-event-banner') as HTMLElement | null
+    if (!banner) return
+    banner.classList.toggle('visible', event !== null)
+    if (event) {
+      const text = banner.querySelector('#king-event-text')
+      if (text) text.textContent = `King ${event.demon.name} manifests!`
+    }
+  }
+
+  /** Update the broadcast corruption indicator. */
+  updateBroadcast(broadcasting: boolean): void {
+    const el = document.getElementById('broadcast-indicator')
+    if (el) el.classList.toggle('visible', broadcasting)
+  }
+
+  /** Update the active pilgrimages list. */
+  updatePilgrimages(state: PilgrimageState): void {
+    const list = this._root.querySelector('#pilgrimage-list')
+    if (!list) return
+    list.innerHTML = ''
+    for (const [demonId, progress] of state.pilgrimages) {
+      const entry = document.createElement('div')
+      entry.className = 'pilgrimage-entry'
+      const pct = Math.round(progress.distanceTraveled / 10) // 1km = 100%
+      entry.innerHTML = `<span>${demonId}</span><span>${progress.completed ? 'Complete' : `${pct}%`}</span>`
+      list.appendChild(entry)
+    }
+  }
+
+  /** Update the collective ritual status. */
+  updateCollectiveRitual(state: CollectiveRitualState | null): void {
+    const status = this._root.querySelector('#collective-ritual-status')
+    if (!status) return
+    if (!state) {
+      status.textContent = 'No active ritual'
+      return
+    }
+    status.textContent = `Phase: ${state.phase} | Contributions: ${state.contributions.length}/3`
+  }
+
+  /** Update the inner circle hierarchy ranking. */
+  updateHierarchy(state: HierarchyState): void {
+    const list = this._root.querySelector('#hierarchy-list')
+    if (!list) return
+    list.innerHTML = ''
+    const ranking = getRanking(state)
+    for (const playerId of ranking) {
+      const weight = getNormalizedWeight(state, playerId)
+      const entry = document.createElement('div')
+      entry.className = 'hierarchy-entry'
+      entry.innerHTML = `<span>${playerId}</span><span>${Math.round(weight * 100)}%</span>`
+      list.appendChild(entry)
+    }
+  }
+
+  /** Update the spectral observation log. */
+  updateObservations(state: SpectralObservationState): void {
+    const list = this._root.querySelector('#observation-list')
+    if (!list) return
+    list.innerHTML = ''
+    if (state.activeObservations.length === 0) {
+      list.textContent = 'No witnessed clashes'
+      return
+    }
+    for (const obs of state.activeObservations) {
+      const entry = document.createElement('div')
+      entry.className = 'observation-entry'
+      entry.innerHTML = `<span>${obs.clashResult.outcome}</span><span>Absorbed: ${(obs.corruptionAbsorbed * 100).toFixed(1)}%</span>`
+      list.appendChild(entry)
+    }
+  }
+
+  /** Update demon disposition in the study screen. */
+  updateDemonDisposition(personality: DemonPersonality): void {
+    const el = this._root.querySelector('#demon-personality-details')
+    if (!el) return
+    const shift = personality.demandShift > 0 ? 'Aggressive' : personality.demandShift < 0 ? 'Cooperative' : 'Neutral'
+    el.innerHTML = `<div>Disposition: ${shift}</div><div>Binding difficulty: ${Math.round(personality.bindingDifficultyMultiplier * 100)}%</div>${personality.anomalousEncounters ? '<div class="anomalous">Anomalous encounters possible</div>' : ''}`
   }
 
   /** Flash a whisper message and auto-fade after 4 s. */
@@ -1821,6 +1938,11 @@ export class UIManager {
     const content = el('div', '', 'study-content')
     screen.appendChild(content)
 
+    // Demon personality section
+    const personalitySection = el('div', '', 'demon-personality-section')
+    personalitySection.innerHTML = '<h3>Demon Disposition</h3><div id="demon-personality-details"></div>'
+    screen.appendChild(personalitySection)
+
     return screen
   }
 
@@ -1899,9 +2021,28 @@ export class UIManager {
     `
     content.appendChild(currentPlace)
 
+    // King event banner
+    const kingBanner = el('div', '', 'king-event-banner')
+    kingBanner.innerHTML = '<span id="king-event-text"></span>'
+    const joinBtn = el('button', '', 'join-king-event-btn')
+    joinBtn.textContent = 'Join'
+    joinBtn.addEventListener('click', () => this._callbacks?.onJoinKingEvent?.())
+    kingBanner.appendChild(joinBtn)
+    content.appendChild(kingBanner)
+
     // Nearby list
     const nearbyList = el('div', '', 'world-nearby-list')
     content.appendChild(nearbyList)
+
+    // Pilgrimages section
+    const pilgrimSection = el('div', '', 'pilgrimages-section')
+    pilgrimSection.innerHTML = '<h3>Pilgrimages</h3><div id="pilgrimage-list"></div>'
+    content.appendChild(pilgrimSection)
+
+    // Entropy counter (appended to header area)
+    const entropyCounter = el('div', '', 'entropy-counter')
+    entropyCounter.innerHTML = '<span class="stat-label">Entropy</span> <span id="entropy-value">0</span>'
+    content.appendChild(entropyCounter)
 
     // No location message
     const noLoc = el('p', '', 'world-no-location')
@@ -2071,6 +2212,11 @@ export class UIManager {
     actionsRow.appendChild(wardBtn)
     content.appendChild(actionsRow)
 
+    // Spectral observation log
+    const obsLog = el('div', '', 'observation-log')
+    obsLog.innerHTML = '<h3>Witnessed Clashes</h3><div id="observation-list"></div>'
+    content.appendChild(obsLog)
+
     // Last clash result link
     const clashBtn = el('button', '', 'pvp-last-clash-btn')
     clashBtn.style.cssText = 'margin-top:0.75rem;padding:0.4rem 1rem;border:1px solid #441133;background:transparent;color:#994433;border-radius:4px;cursor:pointer;font-family:inherit;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;align-self:center;'
@@ -2146,6 +2292,23 @@ export class UIManager {
     content.appendChild(membersTitle)
     const membersList = el('div', '', 'coven-members-list')
     content.appendChild(membersList)
+
+    // Inner circle section
+    const innerCircle = el('div', '', 'inner-circle-section')
+    innerCircle.innerHTML = '<h3>Inner Circle</h3><div id="hierarchy-list"></div>'
+    content.appendChild(innerCircle)
+
+    // Collective ritual section
+    const collectiveRitual = el('div', '', 'collective-ritual-section')
+    collectiveRitual.innerHTML = '<h3>Collective Ritual</h3><div id="collective-ritual-status">No active ritual</div>'
+    const startRitualBtn = el('button', '', 'start-collective-ritual-btn')
+    startRitualBtn.textContent = 'Begin Ritual'
+    startRitualBtn.addEventListener('click', () => {
+      const demonId = useCanvasStore.getState().currentDemonId
+      if (demonId) this._callbacks?.onStartCollectiveRitual?.(demonId)
+    })
+    collectiveRitual.appendChild(startRitualBtn)
+    content.appendChild(collectiveRitual)
 
     // Shared grimoire section
     const grimoireTitle = el('div', 'pvp-section-title')
@@ -2269,6 +2432,11 @@ export class UIManager {
     })
     document.body.appendChild(vessel)
     this._vesselWarning = vessel
+
+    // Broadcast indicator
+    const broadcast = el('div', '', 'broadcast-indicator')
+    broadcast.textContent = 'Broadcasting corruption\u2026'
+    document.body.appendChild(broadcast)
   }
 
   private _startRadar(): void {
