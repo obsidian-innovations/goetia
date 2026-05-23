@@ -54,14 +54,18 @@ export class AtmosphericLayer extends Container {
 
   private _drawBg(): void {
     this._bg.clear()
-    this._bg.rect(0, 0, this._w, this._h).fill({ color: 0x08070f })
+    this._bg.rect(0, 0, this._w, this._h).fill({ color: 0x06050c })
   }
 
   private _spawnParticles(): void {
-    const PARTICLE_COUNT = 8
+    const PARTICLE_COUNT = 12
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const gfx = new Graphics()
-      gfx.circle(0, 0, 2 + Math.random() * 2).fill({ color: 0x7744bb })
+      // Mostly arcane-violet motes with occasional warm-gold embers — candlelit air
+      const ember = Math.random() < 0.3
+      const color = ember ? 0xd9a441 : 0x9a6cff
+      const radius = ember ? 1 + Math.random() * 1.4 : 2 + Math.random() * 2
+      gfx.circle(0, 0, radius).fill({ color })
       const particle: Particle = {
         gfx,
         vx: (Math.random() - 0.5) * 0.4,

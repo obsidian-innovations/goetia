@@ -939,6 +939,6 @@ init().catch((err) => {
   const msg = document.createElement('p')
   msg.textContent = `Init error: ${err instanceof Error ? err.message : String(err)}`
   msg.style.cssText =
-    'color:#ff6666;text-align:center;margin-top:2rem;font-family:Georgia,serif;padding:0 1rem'
+    "color:#df4a3c;text-align:center;margin-top:2rem;font-family:'Cormorant Garamond',Georgia,serif;font-size:1.2rem;padding:0 1rem"
   document.body.appendChild(msg)
 })
