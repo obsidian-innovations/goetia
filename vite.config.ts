@@ -15,6 +15,11 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      // Serve the service worker during `npm run dev` so PWA behaviour
+      // (install, offline app shell) can be exercised without a prod build.
+      devOptions: {
+        enabled: true,
+      },
       workbox: {
         // New service worker takes over immediately without waiting for all
         // tabs to close, so users always run the latest JS after a deploy.
