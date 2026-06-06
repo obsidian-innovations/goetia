@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { listDemons } from '@engine/demons/DemonRegistry'
+import { listDemons, getDemon } from '@engine/demons/DemonRegistry'
+import type { Echo } from '@engine/world/Echoes'
 import { GLYPH_TEMPLATES } from '@engine/sigil/GlyphLibrary'
 import type { CorruptionStage } from '@engine/corruption/CorruptionEngine'
 import type { WhisperIntensity } from '@engine/corruption/WhisperEngine'
@@ -8,6 +9,8 @@ import type { VesselPerspectiveState } from '@engine/corruption/VesselPerspectiv
 import { useCanvasStore } from '@stores/canvasStore'
 import { useGrimoireStore } from '@stores/grimoireStore'
 import { useResearchStore } from '@stores/researchStore'
+import { usePvPStore } from '@stores/pvpStore'
+import { useWorldStore } from '@stores/worldStore'
 import type { DrawingPhase } from '@stores/canvasStore'
 import type { Demon, GlyphDifficulty, Sigil, SigilVisualState } from '@engine/sigil/Types'
 import type { AttentionGesture } from '@engine/charging/AttentionGesture'
@@ -25,7 +28,7 @@ import type { CollectiveRitualState } from '@engine/social/CollectiveRitual'
 import type { HierarchyState } from '@engine/social/InnerCircle'
 import { getRanking, getNormalizedWeight } from '@engine/social/InnerCircle'
 import type { SpectralObservationState } from '@engine/social/SpectralObservation'
-import type { DemonPersonality } from '@engine/social/Anamnesis'
+import type { DemonPersonality, DemonTreatment } from '@engine/social/Anamnesis'
 import { startCamera, stopCamera } from '@services/camera'
 import type { TemporalModifiers } from '@engine/temporal/TemporalEngine'
 import { getMoonSymbol } from '@engine/temporal/TemporalEngine'
@@ -41,6 +44,34 @@ const TIER_FLAVOR: Record<FamiliarityTier, string> = {
   acquaintance: 'It recognizes your hand',
   familiar:     'The demon speaks your name',
   bonded:       'You are bound together',
+}
+
+/** Narrative line describing how a demon's accumulated memory colours its disposition. */
+function _dispositionFlavor(p: DemonPersonality, t: DemonTreatment): string {
+  if (p.demandShift > 0.02) return 'Your offensive workings have hardened it; its demands grow heavier.'
+  if (p.bindingDifficultyMultiplier > 1.0) return 'Repeated purifications have made it wary — it resists the binding.'
+  if (p.demandShift < -0.02) return 'Long familiarity has gentled it; it yields more readily to your hand.'
+  if (t.bindings > 0) return 'It remembers the shape of your seal.'
+  return 'It stirs faintly at your approach.'
+}
+
+/** Render an echo as a readable whisper fragment, resolving the demon's name when known. */
+function _echoText(e: Echo): string {
+  try {
+    return `the seal of ${getDemon(e.demonId).name} was traced here`
+  } catch {
+    return e.text
+  }
+}
+
+/** Short disposition label + CSS modifier for a demon's accumulated memory, or null if none. */
+function _dispositionChip(p: DemonPersonality, t: DemonTreatment): { label: string; cls: string } | null {
+  const total = t.bindings + t.purifications + t.hexUses + t.clashUses
+  if (total === 0) return null
+  if (p.demandShift > 0.02) return { label: 'Resentful', cls: 'aggressive' }
+  if (p.bindingDifficultyMultiplier > 1.0) return { label: 'Resistant', cls: 'resistant' }
+  if (p.demandShift < -0.02) return { label: 'Cooperative', cls: 'cooperative' }
+  return { label: 'Remembers you', cls: 'neutral' }
 }
 
 // ─── Callbacks injected from main ────────────────────────────────────────────
@@ -213,6 +244,17 @@ const STYLE = `
     border-radius: 2px; transition: width 0.5s ease;
   }
   .demon-card .d-hint { font-size: 0.6rem; color: #554466; margin-top: 0.1rem; font-style: italic; }
+  .demon-card .d-disposition {
+    font-size: 0.58rem; letter-spacing: 0.05em; margin-top: 0.2rem; font-style: italic;
+    color: var(--ink-faint);
+  }
+  .demon-card .d-disposition.aggressive  { color: var(--blood); }
+  .demon-card .d-disposition.resistant   { color: var(--ember); }
+  .demon-card .d-disposition.cooperative { color: var(--spectral); }
+  .demon-card .d-disposition.neutral     { color: var(--ink-dim); }
+  #demon-personality-section .dp-counts { font-size: 0.72rem; color: #9988aa; margin-top: 0.3rem; letter-spacing: 0.03em; }
+  #demon-personality-section .dp-flavor { font-size: 0.74rem; color: #8877aa; font-style: italic; margin-top: 0.25rem; line-height: 1.4; }
+  #demon-personality-section .anomalous { color: var(--ember); font-size: 0.72rem; margin-top: 0.2rem; }
   #demon-bottom-menu::-webkit-scrollbar { display: none; }
   #demon-bottom-menu button { flex-shrink: 0; }
   #records-btn {
@@ -576,6 +618,15 @@ const STYLE = `
   #world-current-place .wcp-veil { font-size: 0.75rem; color: #997799; }
   #world-current-place .wcp-boost {
     font-size: 0.8rem; color: #88cc44; margin-top: 0.25rem; letter-spacing: 0.06em;
+  }
+  #world-current-place .wcp-echoes:not(:empty) {
+    margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--hair);
+  }
+  #world-current-place .wcp-echoes-label {
+    font-size: 0.62rem; color: #886699; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.3rem;
+  }
+  #world-current-place .wcp-echo {
+    font-size: 0.74rem; color: #b49ad0; font-style: italic; line-height: 1.45; letter-spacing: 0.02em;
   }
   #world-nearby-list { width: 100%; display: flex; flex-direction: column; gap: 0.4rem; }
   .world-place-entry {
@@ -1120,6 +1171,11 @@ export class UIManager {
       content.appendChild(lore)
     }
 
+    // ── Demon disposition (Anamnesis) ─────────────────────────────────────
+    const personality = usePvPStore.getState().getDemonPersonalityModifiers(sigil.demonId)
+    const treatment = usePvPStore.getState().globalMemory.treatments.get(sigil.demonId)
+    this.updateDemonDisposition(personality, treatment)
+
     this._show('study')
   }
 
@@ -1176,6 +1232,8 @@ export class UIManager {
           const mult = (1.5 + (1 - currentPlace.veilStrength) * 1.5).toFixed(1)
           boostEl.textContent = `Charge rate: ×${mult}`
         }
+        const echoesEl = cpWrap.querySelector<HTMLElement>('.wcp-echoes')
+        if (echoesEl) this._renderThinPlaceEchoes(echoesEl, currentPlace.id)
       }
     }
 
@@ -1499,11 +1557,17 @@ export class UIManager {
   }
 
   /** Update demon disposition in the study screen. */
-  updateDemonDisposition(personality: DemonPersonality): void {
+  updateDemonDisposition(personality: DemonPersonality, treatment?: DemonTreatment): void {
     const el = this._root.querySelector('#demon-personality-details')
     if (!el) return
     const shift = personality.demandShift > 0 ? 'Aggressive' : personality.demandShift < 0 ? 'Cooperative' : 'Neutral'
-    el.innerHTML = `<div>Disposition: ${shift}</div><div>Binding difficulty: ${Math.round(personality.bindingDifficultyMultiplier * 100)}%</div>${personality.anomalousEncounters ? '<div class="anomalous">Anomalous encounters possible</div>' : ''}`
+    const counts = treatment
+      ? `<div class="dp-counts">Bound ×${treatment.bindings} · Purified ×${treatment.purifications} · Hexed ×${treatment.hexUses}</div>`
+      : ''
+    const flavor = treatment && (treatment.bindings + treatment.purifications + treatment.hexUses + treatment.clashUses) > 0
+      ? `<div class="dp-flavor">${_dispositionFlavor(personality, treatment)}</div>`
+      : `<div class="dp-flavor">It does not yet know your hand.</div>`
+    el.innerHTML = `<div>Disposition: ${shift}</div><div>Binding difficulty: ${Math.round(personality.bindingDifficultyMultiplier * 100)}%</div>${personality.anomalousEncounters ? '<div class="anomalous">Anomalous encounters possible</div>' : ''}${counts}${flavor}`
   }
 
   /** Flash a whisper message and auto-fade after 4 s. */
@@ -1663,6 +1727,22 @@ export class UIManager {
           ? `${Math.round(progress * 100)}% researched`
           : 'Perform rituals to discover'
         card.appendChild(hint)
+      }
+    }
+
+    // Disposition chip — only once the demon has accumulated memory of the player
+    if (unlocked) {
+      const treatment = usePvPStore.getState().globalMemory.treatments.get(demon.id)
+      if (treatment) {
+        const personality = usePvPStore.getState().getDemonPersonalityModifiers(demon.id)
+        const chip = _dispositionChip(personality, treatment)
+        if (chip) {
+          const chipEl = el('div', `d-disposition ${chip.cls}`)
+          chipEl.textContent = treatment.bindings > 0
+            ? `${chip.label} · bound ×${treatment.bindings}`
+            : chip.label
+          card.appendChild(chipEl)
+        }
       }
     }
 
@@ -2048,6 +2128,21 @@ export class UIManager {
     return screen
   }
 
+  /** Render the echoes ("whispering wall") left at a thin place into the given container. */
+  private _renderThinPlaceEchoes(container: HTMLElement, thinPlaceId: string): void {
+    const echoes = useWorldStore.getState().getThinPlaceEchoes(thinPlaceId)
+    if (echoes.length === 0) {
+      container.innerHTML = ''
+      return
+    }
+    const recent = [...echoes].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5)
+    const lines = recent.map(e => {
+      const op = Math.max(0.4, Math.min(1, e.intensity)).toFixed(2)
+      return `<div class="wcp-echo" style="opacity:${op}">❝ ${_echoText(e)} ❞</div>`
+    }).join('')
+    container.innerHTML = `<div class="wcp-echoes-label">Echoes linger here · ${echoes.length}</div>${lines}`
+  }
+
   private _buildWorld(): HTMLDivElement {
     const screen = el('div', 'screen', 'screen-world')
 
@@ -2120,6 +2215,7 @@ export class UIManager {
       <div class="wcp-name"></div>
       <div class="wcp-veil"></div>
       <div class="wcp-boost"></div>
+      <div class="wcp-echoes"></div>
     `
     content.appendChild(currentPlace)
 

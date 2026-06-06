@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla'
+import { grimoireDB } from '@db/grimoire'
 import type { Sigil, Demon } from '@engine/sigil/Types'
 import type { ClashResult } from '@engine/pvp/ClashResolver'
 import {
@@ -109,6 +110,8 @@ interface PvPStoreActions {
   recordDemonBinding: (demonId: string) => void
   recordDemonPurification: (demonId: string) => void
   getDemonPersonalityModifiers: (demonId: string) => DemonPersonality
+  /** Load persisted demon memory from the grimoire DB */
+  loadAnamnesis: () => void
 
   // ── CollectiveRitual ───────────────────────────────────────────────────
   startCollectiveRitual: (demonId: string, now: number) => void
@@ -246,19 +249,30 @@ export const usePvPStore = createStore<PvPStore>((set, get) => ({
   // ── Anamnesis ────────────────────────────────────────────────────────────
 
   recordDemonHexUse(demonId: string) {
-    set(state => ({ globalMemory: recordHexUse(state.globalMemory, demonId) }))
+    const globalMemory = recordHexUse(get().globalMemory, demonId)
+    set({ globalMemory })
+    persistAnamnesis(globalMemory)
   },
 
   recordDemonBinding(demonId: string) {
-    set(state => ({ globalMemory: recordBinding(state.globalMemory, demonId) }))
+    const globalMemory = recordBinding(get().globalMemory, demonId)
+    set({ globalMemory })
+    persistAnamnesis(globalMemory)
   },
 
   recordDemonPurification(demonId: string) {
-    set(state => ({ globalMemory: recordPurification(state.globalMemory, demonId) }))
+    const globalMemory = recordPurification(get().globalMemory, demonId)
+    set({ globalMemory })
+    persistAnamnesis(globalMemory)
   },
 
   getDemonPersonalityModifiers(demonId: string): DemonPersonality {
     return getDemonPersonality(get().globalMemory, demonId)
+  },
+
+  loadAnamnesis() {
+    const treatments = grimoireDB.getAnamnesis()
+    set({ globalMemory: { treatments: new Map(Object.entries(treatments)) } })
   },
 
   // ── CollectiveRitual ─────────────────────────────────────────────────────
@@ -327,3 +341,10 @@ export const usePvPStore = createStore<PvPStore>((set, get) => ({
     set(state => ({ observationState: clearObservations(state.observationState) }))
   },
 }))
+
+// ─── Persistence helpers ─────────────────────────────────────────────────────
+
+/** Serialize the demon-memory Map and persist it to the grimoire DB. */
+function persistAnamnesis(memory: GlobalDemonMemory): void {
+  grimoireDB.saveAnamnesis(Object.fromEntries(memory.treatments))
+}

@@ -8,6 +8,8 @@ import type { FeralSigilState } from '@engine/grimoire/FeralEngine'
 import type { GlyphDrawingHistory } from '@engine/sigil/GlyphEvolution'
 import type { ShadowEntry } from '@engine/grimoire/ShadowGrimoire'
 import type { DemonOffer } from '@engine/demands/NegotiationEngine'
+import type { DemonTreatment } from '@engine/social/Anamnesis'
+import type { Echo } from '@engine/world/Echoes'
 
 // ─── Page model ────────────────────────────────────────────────────────────
 
@@ -29,6 +31,10 @@ interface GrimoireData {
   glyphHistory?: Record<string, GlyphDrawingHistory>
   shadowEntries?: ShadowEntry[]
   activeOffers?: DemonOffer[]
+  /** Anamnesis: per-demon treatment history (demon memory), keyed by demon ID */
+  anamnesis?: Record<string, DemonTreatment>
+  /** Echoes left at thin places, keyed by thin place ID */
+  echoes?: Record<string, Echo[]>
 }
 
 // ─── Valid status transitions ──────────────────────────────────────────────
@@ -59,6 +65,8 @@ export class GrimoireDB {
   private glyphHistory: Record<string, GlyphDrawingHistory> = {}
   private shadowEntries: ShadowEntry[] = []
   private activeOffers: DemonOffer[] = []
+  private anamnesis: Record<string, DemonTreatment> = {}
+  private echoes: Record<string, Echo[]> = {}
 
   // ─── Private I/O ──────────────────────────────────────────────────────────
 
@@ -76,6 +84,8 @@ export class GrimoireDB {
         this.glyphHistory = {}
         this.shadowEntries = []
         this.activeOffers = []
+        this.anamnesis = {}
+        this.echoes = {}
         return
       }
       const parsed = JSON.parse(raw) as GrimoireData | GrimoirePage[]
@@ -91,6 +101,8 @@ export class GrimoireDB {
         this.glyphHistory = {}
         this.shadowEntries = []
         this.activeOffers = []
+        this.anamnesis = {}
+        this.echoes = {}
       } else {
         this.pages = parsed.pages ?? []
         this.research = parsed.research ?? {}
@@ -102,6 +114,8 @@ export class GrimoireDB {
         this.glyphHistory = parsed.glyphHistory ?? {}
         this.shadowEntries = parsed.shadowEntries ?? []
         this.activeOffers = parsed.activeOffers ?? []
+        this.anamnesis = parsed.anamnesis ?? {}
+        this.echoes = parsed.echoes ?? {}
       }
     } catch {
       this.pages = []
@@ -114,12 +128,14 @@ export class GrimoireDB {
       this.glyphHistory = {}
       this.shadowEntries = []
       this.activeOffers = []
+      this.anamnesis = {}
+      this.echoes = {}
     }
   }
 
   private persist(): void {
     try {
-      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream, grimoireMemory: this.grimoireMemory ?? undefined, feral: Object.keys(this.feral).length > 0 ? this.feral : undefined, glyphHistory: Object.keys(this.glyphHistory).length > 0 ? this.glyphHistory : undefined, shadowEntries: this.shadowEntries.length > 0 ? this.shadowEntries : undefined, activeOffers: this.activeOffers.length > 0 ? this.activeOffers : undefined }
+      const data: GrimoireData = { pages: this.pages, research: this.research, decay: this.decay, familiarity: this.familiarity, dream: this.dream, grimoireMemory: this.grimoireMemory ?? undefined, feral: Object.keys(this.feral).length > 0 ? this.feral : undefined, glyphHistory: Object.keys(this.glyphHistory).length > 0 ? this.glyphHistory : undefined, shadowEntries: this.shadowEntries.length > 0 ? this.shadowEntries : undefined, activeOffers: this.activeOffers.length > 0 ? this.activeOffers : undefined, anamnesis: Object.keys(this.anamnesis).length > 0 ? this.anamnesis : undefined, echoes: Object.keys(this.echoes).length > 0 ? this.echoes : undefined }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     } catch {
       // Storage quota exceeded or unavailable — silently ignore
@@ -383,6 +399,32 @@ export class GrimoireDB {
   saveResearch(state: ResearchState): void {
     this.load()
     this.research[state.demonId] = state
+    this.persist()
+  }
+
+  // ─── Anamnesis (demon memory) ─────────────────────────────────────────────
+
+  getAnamnesis(): Record<string, DemonTreatment> {
+    this.load()
+    return { ...this.anamnesis }
+  }
+
+  saveAnamnesis(treatments: Record<string, DemonTreatment>): void {
+    this.load()
+    this.anamnesis = { ...treatments }
+    this.persist()
+  }
+
+  // ─── Echoes (whispering wall) ─────────────────────────────────────────────
+
+  getEchoes(): Record<string, Echo[]> {
+    this.load()
+    return { ...this.echoes }
+  }
+
+  saveEchoes(echoes: Record<string, Echo[]>): void {
+    this.load()
+    this.echoes = { ...echoes }
     this.persist()
   }
 }

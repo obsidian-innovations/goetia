@@ -34,8 +34,11 @@ import {
   createWhisperingWall,
   embedEcho as embedEchoFn,
   getResonanceModifier,
+  getEchoes as getEchoesFn,
   type WhisperingWallState,
+  type Echo,
 } from '@engine/world/Echoes'
+import { grimoireDB } from '@db/grimoire'
 import {
   createEntropyState,
   recordEntropyEvent,
@@ -115,6 +118,10 @@ interface WorldStoreActions {
   // ── Echoes ─────────────────────────────────────────────────────────────
   embedEcho: (thinPlaceId: string, text: string, demonId: string, playerId: string, now: number) => void
   getEchoResonance: (thinPlaceId: string) => number
+  /** Echoes embedded at a given thin place (for display) */
+  getThinPlaceEchoes: (thinPlaceId: string) => Echo[]
+  /** Restore persisted echoes from the grimoire DB */
+  loadEchoes: () => void
 
   // ── EntropyClock ───────────────────────────────────────────────────────
   recordEntropy: (eventType: EntropyEventType) => void
@@ -269,13 +276,22 @@ export const useWorldStore = createStore<WorldStore>((set, get) => ({
   // ── Echoes ───────────────────────────────────────────────────────────────
 
   embedEcho(thinPlaceId: string, text: string, demonId: string, playerId: string, now: number) {
-    set(state => ({
-      echoState: embedEchoFn(state.echoState, thinPlaceId, text, demonId, playerId, now),
-    }))
+    const echoState = embedEchoFn(get().echoState, thinPlaceId, text, demonId, playerId, now)
+    set({ echoState })
+    grimoireDB.saveEchoes(Object.fromEntries(echoState.echoes))
   },
 
   getEchoResonance(thinPlaceId: string): number {
     return getResonanceModifier(get().echoState, thinPlaceId)
+  },
+
+  getThinPlaceEchoes(thinPlaceId: string): Echo[] {
+    return getEchoesFn(get().echoState, thinPlaceId)
+  },
+
+  loadEchoes() {
+    const echoes = grimoireDB.getEchoes()
+    set({ echoState: { echoes: new Map(Object.entries(echoes)) } })
   },
 
   // ── EntropyClock ─────────────────────────────────────────────────────────

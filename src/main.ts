@@ -147,6 +147,9 @@ async function init(): Promise<void> {
   // Load grimoire and research from localStorage
   useGrimoireStore.getState().load()
   useResearchStore.getState().load()
+  // Restore demon memory (Anamnesis) and thin-place echoes from localStorage
+  usePvPStore.getState().loadAnamnesis()
+  useWorldStore.getState().loadEchoes()
 
   // Process any accumulated dreams since last session
   processDreams(Date.now())
